@@ -1,0 +1,50 @@
+port: 8080
+mode: "debug"   # gin 运行模式: debug / release / test
+jwt:
+  secret: "HowFarIsIt"
+  access_ttl: "15m"
+
+internal:
+  token: "HowFarIsIt"
+
+database:
+  host: "localhost"
+  port: 3306
+  user: "root"
+  password: "Accelerator0611!"
+  name: "DreamReel"
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: "1h" 
+  conn_max_idle_time: "5m"
+
+redis:
+  addr: "localhost:6379"
+  password: "Accelerator0611!"
+  db: 0
+  pool_size: 50
+  min_idle_conns: 10
+  dial_timeout: "2s"
+  read_timeout: "1s"
+  write_timeout: "1s"
+  pool_timeout: "2s"
+
+rabbitmq:
+  url: "amqp://guest:guest@localhost:5672/"
+  interaction_exchange: "dreamreel.interaction"
+  action_changed_queue: "dreamreel.interaction.action_changed"
+  action_changed_routing: "interaction.action_changed"
+  video_exchange: "dreamreel.video"
+  video_published_queue: "dreamreel.video.published"
+  video_embedding_queue: "dreamreel.video.embedding"
+  video_published_routing: "dreamreel.published"
+  exposure_exchange: "dreamreel.exposure"
+  view_event_recorded_queue: "dreamreel.exposure.view_event_recorded"
+  view_event_recorded_routing: "exposure.view_event_recorded"
+
+log:
+  level: "debug"
+  filename: "G:/GoCode/DreamReel/apps/api/logfile/DreamReel.log"
+  max_size: 200
+  max_age: 30
+  max_backups: 7
