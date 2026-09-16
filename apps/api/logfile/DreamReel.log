@@ -1,7 +1,9 @@
-{"level":"INFO","ts":"2026-09-13T21:11:27.021+0800","caller":"dreamreel/main.go:63","msg":"数据库连接成功"}
-{"level":"INFO","ts":"2026-09-13T21:11:27.088+0800","caller":"dreamreel/main.go:75","msg":"Redis 连接成功"}
-{"level":"INFO","ts":"2026-09-13T21:11:27.089+0800","caller":"dreamreel/main.go:83","msg":"路由注册成功"}
-{"level":"INFO","ts":"2026-09-13T21:11:27.089+0800","caller":"dreamreel/main.go:85","msg":"服务器正在运行中","port":8080,"mode":"debug"}
-{"level":"INFO","ts":"2026-09-13T21:11:45.476+0800","caller":"middleware/log.go:32","msg":"/metrics","status":200,"method":"GET","path":"/metrics","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.0012359}
-{"level":"INFO","ts":"2026-09-13T21:14:04.820+0800","caller":"httpgin/gin.go:53","msg":"收到关停信号，正在关闭后端服务..."}
-{"level":"INFO","ts":"2026-09-13T21:14:04.822+0800","caller":"dreamreel/main.go:95","msg":"后端服务已关闭"}
+{"level":"INFO","ts":"2026-09-16T12:21:55.483+0800","caller":"dreamreel/main.go:63","msg":"数据库连接成功"}
+{"level":"ERROR","ts":"2026-09-16T12:21:57.313+0800","caller":"dreamreel/main.go:25","msg":"启动失败","error":"初始化 Redis 失败: dial tcp 127.0.0.1:6379: connectex: No connection could be made because the target machine actively refused it."}
+{"level":"INFO","ts":"2026-09-16T12:22:28.331+0800","caller":"dreamreel/main.go:63","msg":"数据库连接成功"}
+{"level":"INFO","ts":"2026-09-16T12:22:28.397+0800","caller":"dreamreel/main.go:75","msg":"Redis 连接成功"}
+{"level":"INFO","ts":"2026-09-16T12:22:28.570+0800","caller":"dreamreel/main.go:83","msg":"路由注册成功"}
+{"level":"INFO","ts":"2026-09-16T12:22:28.570+0800","caller":"dreamreel/main.go:85","msg":"服务器正在运行中","port":8080,"mode":"debug"}
+{"level":"INFO","ts":"2026-09-16T12:24:00.714+0800","caller":"middleware/log.go:32","msg":"/users","status":404,"method":"POST","path":"/users","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0}
+{"level":"INFO","ts":"2026-09-16T12:24:09.224+0800","caller":"middleware/log.go:32","msg":"/api/users","status":400,"method":"POST","path":"/api/users","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.0021674}
+{"level":"INFO","ts":"2026-09-16T12:25:39.508+0800","caller":"middleware/log.go:32","msg":"/api/users","status":201,"method":"POST","path":"/api/users","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.092744}

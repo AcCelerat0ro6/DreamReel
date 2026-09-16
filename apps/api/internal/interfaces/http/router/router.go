@@ -4,15 +4,58 @@ import (
 	"database/sql"
 	"net/http"
 
+	applicationaccount "DreamReel/internal/application/account"
 	"DreamReel/internal/infra/config"
 	"DreamReel/internal/infra/metrics"
+	infraaccount "DreamReel/internal/infra/persistence/account"
+	"DreamReel/internal/infra/persistence/migration"
+	interfaceshttpaccount "DreamReel/internal/interfaces/http/account"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	gormmysql "gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 // Register 注册路由
 func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) error {
+	// ============================================================
+	// 1. 基础设施：数据库、JWT、Redis、RabbitMQ
+	// ============================================================
+
+	// 1.1 GORM连接初始化,复用连接
+	gormDB, err := gorm.Open(gormmysql.New(gormmysql.Config{
+		Conn: db,
+	}), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+
+	// 1.2  创建表结构
+	if err := migration.AutoMigrate(gormDB); err != nil {
+		return err
+	}
+
+	// ============================================================
+	// 2. Account 域：注册、登录、资料、JWT 签发
+	// ============================================================
+	accountRepo := infraaccount.New(gormDB)
+	accountService := applicationaccount.New(accountRepo)
+	accountHandler := interfaceshttpaccount.New(accountService)
+
+	// ============================================================
+	// 3. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
+	// ============================================================
+	// authMiddleware := interfaceshttpmiddleware.NewJWTAuth(jwtManager)
+
+	api := g.Group("/api")
+
+	// 会话资源用于登录态：创建会话表示登录，删除当前会话表示登出。
+
+	// 用户资源承载注册、当前用户资料和用户作品列表。
+	users := api.Group("/users")
+	users.POST("", accountHandler.Register)
+
 	g.GET("/health", HealthCheck(db, rdb))
 
 	g.GET("/metrics", gin.WrapH(metrics.Handler()))
