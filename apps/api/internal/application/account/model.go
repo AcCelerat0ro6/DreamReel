@@ -1,6 +1,9 @@
 package applicationaccount
 
-import domainaccount "DreamReel/internal/domain/account"
+import (
+	domainaccount "DreamReel/internal/domain/account"
+	"time"
+)
 
 func TurnUserIntoProfile(user *domainaccount.User) *Profile {
 	return &Profile{
@@ -29,4 +32,18 @@ type Profile struct {
 	FollowingCount int
 	FollowerCount  int
 	WorkCount      int
+}
+
+// LoginResult 包含了登录成功后返回给 HTTP 层的 token 数据。
+type LoginResult struct {
+	AccessToken      string
+	TokenType        string
+	ExpiresInSeconds int64
+}
+
+type TokenSigner interface {
+	// 签发Access Token
+	SignAccessToken(userID int64, role string) (string, error)
+	// 解析Access Token 过期实践
+	AccessTTL() time.Duration
 }

@@ -52,3 +52,38 @@ func isBadRequestError(err error) bool {
 		errors.Is(err, domainaccount.ErrInvalidUserID) ||
 		errors.Is(err, domainaccount.ErrEmptyProfileUpdate)
 }
+
+// Login 登录处理
+func (h *Handler) Login(c *gin.Context) {
+	var req LoginByPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid login request param"})
+		return
+	}
+
+	token, err := h.service.Login(c.Request.Context(), req.Account, req.Password)
+	if err != nil {
+		if isBadRequestError(err) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, domainaccount.ErrInvalidCredentials) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		zap.L().Info("Internal Error While Login:", zap.Error(err))
+		return
+	}
+
+	c.JSON(http.StatusOK, loginResponse{
+		AccessToken:      token.AccessToken,
+		TokenType:        token.TokenType,
+		ExpiresInSeconds: token.ExpiresInSeconds,
+	})
+}
+
+// Logout 登出处理
+func (h *Handler) Logout(c *gin.Context) {
+	c.Status(http.StatusNoContent)
+}

@@ -1,6 +1,9 @@
 package infraaccount
 
-import "time"
+import (
+	domainaccount "DreamReel/internal/domain/account"
+	"time"
+)
 
 // UserModel 映射 account 表，保存用户账户信息
 type UserModel struct {
@@ -18,4 +21,35 @@ type UserModel struct {
 
 func (UserModel) TableName() string {
 	return "account"
+}
+
+type userWithStatModel struct {
+	ID             int64
+	Account        string
+	Password       string
+	Nickname       string
+	AvatarURL      string
+	Bio            string
+	Status         int
+	Role           string
+	FollowingCount int
+	FollowerCount  int
+	WorkCount      int
+}
+
+// restoreUser 把数据库模型转换回领域对象。
+func restoreUser(user userWithStatModel) *domainaccount.User {
+	return domainaccount.RestoreUserWithStats(
+		user.ID,
+		user.Account,
+		user.Password,
+		user.Nickname,
+		user.AvatarURL,
+		user.Bio,
+		user.Status,
+		user.Role,
+		user.FollowingCount,
+		user.FollowerCount,
+		user.WorkCount,
+	)
 }

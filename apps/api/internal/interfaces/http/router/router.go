@@ -6,10 +6,12 @@ import (
 
 	applicationaccount "DreamReel/internal/application/account"
 	"DreamReel/internal/infra/config"
+	jwt "DreamReel/internal/infra/jwt"
 	"DreamReel/internal/infra/metrics"
 	infraaccount "DreamReel/internal/infra/persistence/account"
 	"DreamReel/internal/infra/persistence/migration"
 	interfaceshttpaccount "DreamReel/internal/interfaces/http/account"
+	"DreamReel/internal/interfaces/http/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -39,8 +41,12 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	// ============================================================
 	// 2. Account 域：注册、登录、资料、JWT 签发
 	// ============================================================
+	jwtManager, err := jwt.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL)
+	if err != nil {
+		return err
+	}
 	accountRepo := infraaccount.New(gormDB)
-	accountService := applicationaccount.New(accountRepo)
+	accountService := applicationaccount.New(accountRepo, jwtManager)
 	accountHandler := interfaceshttpaccount.New(accountService)
 
 	// ============================================================
@@ -48,9 +54,17 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	// ============================================================
 	// authMiddleware := interfaceshttpmiddleware.NewJWTAuth(jwtManager)
 
+	// ============================================================
+	// 4. 中间件
+	// ============================================================
+	authMiddleware := middleware.NewJWTAuth(jwtManager)
+
 	api := g.Group("/api")
 
 	// 会话资源用于登录态：创建会话表示登录，删除当前会话表示登出。
+	session := api.Group("/sessions")
+	session.POST("", accountHandler.Login)
+	session.DELETE("/cur", authMiddleware, accountHandler.Logout)
 
 	// 用户资源承载注册、当前用户资料和用户作品列表。
 	users := api.Group("/users")

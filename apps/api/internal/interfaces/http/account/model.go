@@ -38,3 +38,17 @@ func TurnProfileIntoResponse(profile *applicationaccount.Profile) RegisterRespon
 		WorkCount:      profile.WorkCount,
 	}
 }
+
+// 登录请求结构体
+type LoginByPasswordRequest struct {
+	Account  string `json:"account"`
+	Password string `json:"password"`
+}
+
+// 登录响应结构体
+// 账号登录响应
+type loginResponse struct {
+	AccessToken      string `json:"access_token"`
+	TokenType        string `json:"token_type"`
+	ExpiresInSeconds int64  `json:"expires_in_seconds"`
+}

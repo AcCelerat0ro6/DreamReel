@@ -7,3 +7,24 @@
 {"level":"INFO","ts":"2026-09-16T12:24:00.714+0800","caller":"middleware/log.go:32","msg":"/users","status":404,"method":"POST","path":"/users","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0}
 {"level":"INFO","ts":"2026-09-16T12:24:09.224+0800","caller":"middleware/log.go:32","msg":"/api/users","status":400,"method":"POST","path":"/api/users","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.0021674}
 {"level":"INFO","ts":"2026-09-16T12:25:39.508+0800","caller":"middleware/log.go:32","msg":"/api/users","status":201,"method":"POST","path":"/api/users","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.092744}
+{"level":"INFO","ts":"2026-09-16T14:14:21.041+0800","caller":"httpgin/gin.go:53","msg":"收到关停信号，正在关闭后端服务..."}
+{"level":"INFO","ts":"2026-09-16T14:14:21.042+0800","caller":"dreamreel/main.go:95","msg":"后端服务已关闭"}
+{"level":"INFO","ts":"2026-09-16T21:15:18.045+0800","caller":"dreamreel/main.go:63","msg":"数据库连接成功"}
+{"level":"ERROR","ts":"2026-09-16T21:15:19.828+0800","caller":"dreamreel/main.go:25","msg":"启动失败","error":"初始化 Redis 失败: dial tcp 127.0.0.1:6379: connectex: No connection could be made because the target machine actively refused it."}
+{"level":"INFO","ts":"2026-09-16T21:15:53.820+0800","caller":"dreamreel/main.go:63","msg":"数据库连接成功"}
+{"level":"INFO","ts":"2026-09-16T21:15:53.885+0800","caller":"dreamreel/main.go:75","msg":"Redis 连接成功"}
+{"level":"INFO","ts":"2026-09-16T21:15:54.005+0800","caller":"dreamreel/main.go:83","msg":"路由注册成功"}
+{"level":"INFO","ts":"2026-09-16T21:15:54.005+0800","caller":"dreamreel/main.go:85","msg":"服务器正在运行中","port":8080,"mode":"debug"}
+{"level":"INFO","ts":"2026-09-16T21:16:37.484+0800","caller":"middleware/log.go:32","msg":"/api/sessions","status":400,"method":"POST","path":"/api/sessions","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.0021737}
+{"level":"INFO","ts":"2026-09-16T21:16:43.463+0800","caller":"middleware/log.go:32","msg":"/api/sessions","status":200,"method":"POST","path":"/api/sessions","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.075252}
+{"level":"INFO","ts":"2026-09-16T21:55:07.743+0800","caller":"httpgin/gin.go:53","msg":"收到关停信号，正在关闭后端服务..."}
+{"level":"INFO","ts":"2026-09-16T21:55:07.746+0800","caller":"dreamreel/main.go:95","msg":"后端服务已关闭"}
+{"level":"INFO","ts":"2026-09-19T15:21:25.838+0800","caller":"dreamreel/main.go:63","msg":"数据库连接成功"}
+{"level":"INFO","ts":"2026-09-19T15:21:25.987+0800","caller":"dreamreel/main.go:75","msg":"Redis 连接成功"}
+{"level":"INFO","ts":"2026-09-19T15:21:26.193+0800","caller":"dreamreel/main.go:83","msg":"路由注册成功"}
+{"level":"INFO","ts":"2026-09-19T15:21:26.194+0800","caller":"dreamreel/main.go:85","msg":"服务器正在运行中","port":8080,"mode":"debug"}
+{"level":"INFO","ts":"2026-09-19T15:21:41.884+0800","caller":"middleware/log.go:32","msg":"/api/sessions","status":200,"method":"POST","path":"/api/sessions","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.0954963}
+{"level":"INFO","ts":"2026-09-19T15:22:27.596+0800","caller":"middleware/log.go:32","msg":"/api/sessions","status":200,"method":"POST","path":"/api/sessions","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.0833668}
+{"level":"INFO","ts":"2026-09-19T15:22:27.908+0800","caller":"middleware/log.go:32","msg":"/api/sessions","status":200,"method":"POST","path":"/api/sessions","query":"","ip":"::1","user-agent":"HTTPie","errors":"","cost":0.0840298}
+{"level":"INFO","ts":"2026-09-19T16:00:18.225+0800","caller":"httpgin/gin.go:53","msg":"收到关停信号，正在关闭后端服务..."}
+{"level":"INFO","ts":"2026-09-19T16:00:18.228+0800","caller":"dreamreel/main.go:95","msg":"后端服务已关闭"}
