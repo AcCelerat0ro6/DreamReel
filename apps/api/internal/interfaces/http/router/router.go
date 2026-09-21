@@ -5,13 +5,16 @@ import (
 	"net/http"
 
 	applicationaccount "DreamReel/internal/application/account"
+	applicationvideo "DreamReel/internal/application/video"
 	"DreamReel/internal/infra/config"
 	jwt "DreamReel/internal/infra/jwt"
 	"DreamReel/internal/infra/metrics"
 	infraaccount "DreamReel/internal/infra/persistence/account"
 	"DreamReel/internal/infra/persistence/migration"
+	infravideo "DreamReel/internal/infra/persistence/video"
 	interfaceshttpaccount "DreamReel/internal/interfaces/http/account"
 	"DreamReel/internal/interfaces/http/middleware"
+	interfacehttpvideo "DreamReel/internal/interfaces/http/video"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -50,14 +53,26 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	accountHandler := interfaceshttpaccount.New(accountService)
 
 	// ============================================================
-	// 3. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
+	// 3. Video 域：视频发布、查询、软删除
 	// ============================================================
-	// authMiddleware := interfaceshttpmiddleware.NewJWTAuth(jwtManager)
-
+	/*
+		后续RabbitMQ初始化:
+		videoOptions := []applicationvideo.Option{}
+		if rabbitMQ != nil {
+			videoOptions = append(videoOptions, applicationvideo.WithPublishedEventPublisher(rabbitMQ))
+		}
+	*/
+	videoRepo := infravideo.New(gormDB)
+	videoService := applicationvideo.New(videoRepo)
+	videoHandler := interfacehttpvideo.New(videoService)
 	// ============================================================
-	// 4. 中间件
+	// 3. 中间件
 	// ============================================================
 	authMiddleware := middleware.NewJWTAuth(jwtManager)
+
+	// ============================================================
+	// 4. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
+	// ============================================================
 
 	api := g.Group("/api")
 
@@ -70,8 +85,12 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	users := api.Group("/users")
 	users.POST("", accountHandler.Register)
 
-	g.GET("/health", HealthCheck(db, rdb))
+	// 视频资源
+	videos := api.Group("/videos")
+	videos.POST("", authMiddleware, videoHandler.Create)
 
+	// 检查路由提供后端服务基本状况检查
+	g.GET("/health", HealthCheck(db, rdb))
 	g.GET("/metrics", gin.WrapH(metrics.Handler()))
 
 	return nil

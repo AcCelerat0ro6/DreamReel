@@ -2,6 +2,7 @@ package migration
 
 import (
 	infraaccount "DreamReel/internal/infra/persistence/account"
+	infravideo "DreamReel/internal/infra/persistence/video"
 	"errors"
 	"time"
 
@@ -13,6 +14,10 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := autoMigrateModels(db); err != nil {
 		return err
 	}
+	// 在启动时就保证每条视频都有对应的一条统计记录
+	if err := infravideo.EnsureStats(db); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -21,6 +26,8 @@ func autoMigrateModels(db *gorm.DB) error {
 	for attempt := 0; attempt < 4; attempt++ {
 		err = db.AutoMigrate(
 			&infraaccount.UserModel{},
+			&infravideo.VideoModel{},
+			&infravideo.VideoStatModel{},
 		)
 		if err == nil {
 			return nil
@@ -30,8 +37,7 @@ func autoMigrateModels(db *gorm.DB) error {
 		}
 		time.Sleep(time.Duration(attempt+1) * 150 * time.Millisecond)
 	}
-	// return err
-	return nil
+	return err
 }
 
 func isConcurrentMigrationError(err error) bool {

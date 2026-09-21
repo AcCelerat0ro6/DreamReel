@@ -49,6 +49,7 @@ func NewJWTAuth(jwtManager *jwt.Manager) gin.HandlerFunc {
 
 		c.Set(ContextUserIDKey, claims.UserID)
 		c.Set(ContextRoleKey, claims.Role)
+		c.Next()
 	}
 
 }
