@@ -106,3 +106,53 @@ func isDuplicateKeyError(err error) bool {
 	var mysqlErr *mysql.MySQLError
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
+
+func (r *Repository) FindByIDAnyStatus(ctx context.Context, id int64) (*domainvideo.Video, error) {
+	var model videoWithStatModel
+	err := r.db.WithContext(ctx).
+		Table("video as v").
+		Select(videoWithStatSelect()).
+		Joins("LEFT JOIN video_stat AS vs ON vs.video_id = v.id").
+		Where("v.id = ?", id).
+		Take(&model).
+		Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domainvideo.ErrVideoNotFound
+		}
+		return nil, err
+	}
+	return restorevideo(model), nil
+}
+
+func (r *Repository) UpdateStatus(ctx context.Context, video *domainvideo.Video) error {
+	result := r.db.WithContext(ctx).
+		Model(&VideoModel{}).
+		Where("id = ?", video.ID).
+		Update("status", video.Status)
+	if err := result.Error; err != nil {
+		return err
+	}
+	if result.RowsAffected == 0 {
+		return domainvideo.ErrVideoNotFound
+	}
+	return nil
+}
+
+func (r *Repository) FindByID(ctx context.Context, id int64) (*domainvideo.Video, error) {
+	var model videoWithStatModel
+	err := r.db.WithContext(ctx).
+		Table("video AS v").
+		Select(videoWithStatSelect()).
+		Joins("LEFT JOIN video_stat AS vs ON vs.video_id = v.id").
+		Where("v.id = ? AND v.status = ?", id, domainvideo.StatusPublished).
+		Take(&model).
+		Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domainvideo.ErrVideoNotFound
+		}
+		return nil, err
+	}
+	return restorevideo(model), nil
+}

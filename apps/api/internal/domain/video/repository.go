@@ -8,4 +8,10 @@ type Repository interface {
 	Save(ctx context.Context, video *Video) error
 	// FindByAuthorAndIdempotencyKey 查询作者和幂等键的视频，用于创建视频时避免重复创建。
 	FindByAuthorAndIdempotencyKey(ctx context.Context, authorID int64, idempotencyKey string) (*Video, error)
+	// FindByIDAnyStatus 查询指定状态的视频 用于视频删除
+	FindByIDAnyStatus(ctx context.Context, id int64) (*Video, error)
+	// UpdateStatus 更新视频状态。
+	UpdateStatus(ctx context.Context, video *Video) error
+	// FindByID 根据ID查询视频。
+	FindByID(ctx context.Context, id int64) (*Video, error)
 }

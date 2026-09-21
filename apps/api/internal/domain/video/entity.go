@@ -43,6 +43,23 @@ type Video struct {
 	OriginVideoID *int64
 }
 
+// DeleteBy 执行作者权限校验并把视频置为删除状态。
+func (v *Video) DeleteBy(authorID int64) error {
+	if authorID <= 0 {
+		return ErrInvalidAuthorID
+	}
+	if v.AuthorID != authorID {
+		return ErrVideoPermissionDenied
+	}
+	// 注意：删除采用软删除，保留原始记录用于审计、统计或后续恢复。
+	if v.Status == StatusDeleted {
+		return nil
+	}
+	v.Status = StatusDeleted
+	return nil
+}
+
+// NewPublished 新建发布消息模型
 func NewPublished(authorID int64, title, description, mediaURL, coverURL string, modelName, modelParams, aiStyleTag *string, originVideoID *int64, idempotencyKey string) (*Video, error) {
 	if authorID <= 0 {
 		return nil, ErrInvalidAuthorID

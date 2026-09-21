@@ -88,6 +88,8 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	// 视频资源
 	videos := api.Group("/videos")
 	videos.POST("", authMiddleware, videoHandler.Create)
+	videos.DELETE("/:videoId", authMiddleware, videoHandler.Delete)
+	videos.GET("/:videoId", videoHandler.Get)
 
 	// 检查路由提供后端服务基本状况检查
 	g.GET("/health", HealthCheck(db, rdb))

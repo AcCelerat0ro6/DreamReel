@@ -6,6 +6,8 @@ import (
 	utils "DreamReel/internal/interfaces/http/utils"
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -59,6 +61,52 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 	c.JSON(status, videoCreateResponseFromDomain(result.Video))
 
+}
+
+// Delete 删除当前用户自己的视频，删除操作在领域层做作者权限校验。
+func (h *Handler) Delete(c *gin.Context) {
+	userID, ok := utils.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid access token"})
+		return
+	}
+
+	videoID, err := parsePositiveInt64(c.Param("videoId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid video id"})
+		return
+	}
+
+	if err := h.service.Delete(c.Request.Context(), userID, videoID); err != nil {
+		writeVideoError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// Get 查询公开视频
+func (h *Handler) Get(c *gin.Context) {
+	videoID, err := parsePositiveInt64(c.Param("videoId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid video id"})
+		return
+	}
+	video, err := h.service.Get(c.Request.Context(), videoID)
+	if err != nil {
+		writeVideoError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, videoCreateResponseFromDomain(video))
+}
+
+func parsePositiveInt64(raw string) (int64, error) {
+	value, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || value <= 0 {
+		return 0, domainvideo.ErrInvalidVideoID
+	}
+	return value, nil
 }
 
 func writeVideoError(c *gin.Context, err error) {

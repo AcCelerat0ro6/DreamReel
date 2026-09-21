@@ -109,3 +109,73 @@ func (s *Service) publishCreatedVideo(ctx context.Context, video *domainvideo.Vi
 	}
 	_ = s.publisher.PublishVideoPublished(ctx, event)
 }
+
+// Delete 删除当前用户本人的视频
+func (s *Service) Delete(ctx context.Context, authorID, videoID int64) error {
+	if authorID <= 0 {
+		return domainvideo.ErrInvalidAuthorID
+	}
+	if videoID <= 0 {
+		return domainvideo.ErrInvalidVideoID
+	}
+
+	video, err := s.repo.FindByIDAnyStatus(ctx, videoID)
+	if err != nil {
+		if errors.Is(err, domainvideo.ErrVideoNotFound) {
+			return domainvideo.ErrVideoNotFound
+		}
+		zap.L().Error("load video for delete failed",
+			zap.Int64("video_id", videoID),
+			zap.Int64("author_id", authorID),
+			zap.Error(err),
+		)
+		return ErrLoadVideoFailed
+	}
+	var alreadyDeleted bool = false
+	if video.Status == domainvideo.StatusDeleted {
+		alreadyDeleted = true
+	}
+	// video.DeleteBy校验权限，同时执行状态更新
+	if err := video.DeleteBy(authorID); err != nil {
+		return err
+	}
+	if alreadyDeleted {
+		return nil
+	}
+
+	if err := s.repo.UpdateStatus(ctx, video); err != nil {
+		if errors.Is(err, domainvideo.ErrVideoNotFound) {
+			return domainvideo.ErrVideoNotFound
+		}
+		zap.L().Error("update video status failed",
+			zap.Int64("video_id", videoID),
+			zap.Int64("author_id", authorID),
+			zap.Int("target_status", video.Status),
+			zap.Error(err),
+		)
+		return ErrUpdateVideoFailed
+	}
+	return nil
+
+}
+
+// Get 根据ID查询公开视频
+func (s *Service) Get(ctx context.Context, videoID int64) (*domainvideo.Video, error) {
+	if videoID <= 0 {
+		return nil, domainvideo.ErrInvalidVideoID
+	}
+
+	video, err := s.repo.FindByID(ctx, videoID)
+	if err != nil {
+		if errors.Is(err, domainvideo.ErrVideoNotFound) {
+			return nil, domainvideo.ErrVideoNotFound
+		}
+		zap.L().Error("load video failed",
+			zap.Int64("video_id", videoID),
+			zap.Error(err),
+		)
+		return nil, ErrLoadVideoFailed
+	}
+
+	return video, nil
+}
