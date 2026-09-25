@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// userIDFromContext 从 JWT 中间件写入的上下文读取登录用户 ID。
+// GetuserID 从 JWT 中间件写入的上下文读取登录用户 ID。
 func GetUserID(c *gin.Context) (int64, bool) {
 	value, exists := c.Get(middleware.ContextUserIDKey)
 	if !exists {

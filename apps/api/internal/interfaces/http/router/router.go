@@ -69,6 +69,7 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	// 3. 中间件
 	// ============================================================
 	authMiddleware := middleware.NewJWTAuth(jwtManager)
+	optionalAuthMiddleware := middleware.NewOptionalJWTAuth(jwtManager)
 
 	// ============================================================
 	// 4. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
@@ -90,6 +91,9 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	videos.POST("", authMiddleware, videoHandler.Create)
 	videos.DELETE("/:videoId", authMiddleware, videoHandler.Delete)
 	videos.GET("/:videoId", videoHandler.Get)
+
+	// Feed流资源 用户通过游标控制获取视频列表
+	api.GET("/feed-items", optionalAuthMiddleware, feedHandler.ListFeedItems)
 
 	// 检查路由提供后端服务基本状况检查
 	g.GET("/health", HealthCheck(db, rdb))

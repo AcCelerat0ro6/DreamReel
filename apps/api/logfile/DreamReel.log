@@ -89,3 +89,5 @@
 {"level":"INFO","ts":"2026-09-21T20:00:28.370+0800","caller":"middleware/log.go:32","msg":"/api/videos/6","status":404,"method":"GET","path":"/api/videos/6","query":"","ip":"127.0.0.1","user-agent":"Mozilla/5.0 (Windows NT; Windows NT 10.0; zh-CN) WindowsPowerShell/5.1.26100.9444","errors":"","cost":0}
 {"level":"INFO","ts":"2026-09-21T20:00:28.378+0800","caller":"middleware/log.go:32","msg":"/api/videos/5","status":204,"method":"DELETE","path":"/api/videos/5","query":"","ip":"127.0.0.1","user-agent":"Mozilla/5.0 (Windows NT; Windows NT 10.0; zh-CN) WindowsPowerShell/5.1.26100.9444","errors":"","cost":0.0010581}
 {"level":"INFO","ts":"2026-09-21T20:01:01.575+0800","caller":"middleware/log.go:32","msg":"/api/videos/5","status":404,"method":"GET","path":"/api/videos/5","query":"","ip":"::1","user-agent":"curl/8.21.0","errors":"","cost":0}
+{"level":"INFO","ts":"2026-09-21T22:36:04.912+0800","caller":"httpgin/gin.go:53","msg":"收到关停信号，正在关闭后端服务..."}
+{"level":"INFO","ts":"2026-09-21T22:36:04.927+0800","caller":"dreamreel/main.go:95","msg":"后端服务已关闭"}

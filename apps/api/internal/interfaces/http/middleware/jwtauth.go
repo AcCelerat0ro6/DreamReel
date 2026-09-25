@@ -11,7 +11,7 @@ import (
 const ContextUserIDKey = "userID"
 const ContextRoleKey = "role"
 
-// 鉴权中间件
+// NewJWTAuth 创建一个JWT鉴权中间件
 func NewJWTAuth(jwtManager *jwt.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := strings.TrimSpace(c.GetHeader("Authorization"))
@@ -51,5 +51,28 @@ func NewJWTAuth(jwtManager *jwt.Manager) gin.HandlerFunc {
 		c.Set(ContextRoleKey, claims.Role)
 		c.Next()
 	}
+}
 
+// NewOptionalJWTAuth 在公共接口中补充可选登录身份
+func NewOptionalJWTAuth(jwtManager *jwt.Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		header := strings.TrimSpace(c.GetHeader("Authorization"))
+		if header == "" {
+			c.Next()
+			return
+		}
+		parts := strings.SplitN(header, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(strings.TrimSpace(parts[0]), "Bearer") {
+			c.Next()
+			return
+		}
+
+		token := strings.TrimSpace(parts[1])
+		claims, err := jwtManager.ParseAndValidateToken(token, jwt.TokenTypeAccess)
+		if err == nil {
+			c.Set(ContextUserIDKey, claims.UserID)
+			c.Set(ContextRoleKey, claims.Role)
+		}
+		c.Next()
+	}
 }
