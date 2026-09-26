@@ -1,4 +1,4 @@
-package interfaceshttpfeed
+package interfacehttpfeed
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	applicationfeed "DreamReel/internal/application/feed"
 	domainfeed "DreamReel/internal/domain/feed"
 	httputils "DreamReel/internal/interfaces/http/utils"
 
@@ -13,6 +14,7 @@ import (
 )
 
 type Handler struct {
+	service *applicationfeed.Service
 }
 
 // ListFeedItems 列出指定 scene 的 Feed列表
@@ -35,7 +37,7 @@ func (h *Handler) ListFeedItems(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, feedItemsResponseFromResult(result))
+	c.JSON(http.StatusOK, TurnApplicationResultIntoResponse(result))
 
 }
 

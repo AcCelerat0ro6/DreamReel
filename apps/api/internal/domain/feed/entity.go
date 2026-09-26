@@ -64,3 +64,25 @@ type TimelineCursor struct {
 	PublishedAt time.Time
 	VideoID     int64
 }
+
+// FeedCard 保存视频卡片中相对静态的展示字段
+type FeedCard struct {
+	VideoID         int64
+	AuthorID        int64
+	AuthorNickname  string
+	AuthorAvatarURL string
+	Title           string
+	Description     string
+	MediaURL        string
+	CoverURL        string
+	PublishedAt     time.Time
+	ModelName       *string
+}
+
+// FeedStat 保存视频卡片中高频变更的字段
+type FeedStat struct {
+	VideoID       int64
+	LikeCount     int
+	CommentCount  int
+	FavoriteCount int
+}

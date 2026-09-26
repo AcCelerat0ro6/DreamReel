@@ -12,6 +12,7 @@ var ErrLoadFeedFailed = errors.New("failed to load feed")
 const (
 	timelineFirstPageCacheTTL = 5 * time.Second
 	timelinePageCacheTTL      = 45 * time.Second
+	feedCardCacheTTL          = 15 * time.Minute
 )
 
 // FeedRequest 是所有 Feed 场景共用的查询参数。
@@ -49,4 +50,8 @@ type Strategy interface {
 type FeedCache interface {
 	GetPage(ctx context.Context, key string) (*FeedPage, bool, error)
 	SetPage(ctx context.Context, key string, page *FeedPage, ttl time.Duration) error
+	GetCards(ctx context.Context, videoIDs []int64) (map[int64]*domainfeed.FeedCard, error)
+	SetCards(ctx context.Context, cards map[int64]*domainfeed.FeedCard, ttl time.Duration) error
+	GetStats(ctx context.Context, videoIDs []int64) (map[int64]*domainfeed.FeedStat, error)
+	SetStats(ctx context.Context, stats map[int64]*domainfeed.FeedStat, ttl time.Duration) error
 }
