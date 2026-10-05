@@ -8,13 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
-	"internal/singleflight"
+
 	"strings"
 	"time"
 
 	domainfeed "DreamReel/internal/domain/feed"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 // normalizeLimit 规范 limit 的取值
@@ -94,12 +95,16 @@ func loadFeedPage(ctx context.Context, cache FeedCache, scene domainfeed.Scene, 
 	if page, ok, err := cache.GetPage(ctx, cacheKey); err == nil && ok {
 		// 缓存命中 直接返回
 		return page, nil
+	} else if err != nil {
+		zap.L().Warn("failed to get feed page from cache, falling back to repository.", zap.Error(err), zap.String("cache_key", cacheKey))
 	}
 
 	value, err, _ := group.Do(cacheKey, func() (any, error) {
 		// 二次检查缓存, 若命中则再次返回
 		if page, ok, err := cache.GetPage(ctx, cacheKey); err == nil && ok {
 			return page, nil
+		} else if err != nil {
+			zap.L().Warn("failed to get feed page from cache, falling back to repository.", zap.Error(err), zap.String("cache_key", cacheKey))
 		}
 		// 查库
 		page, err := load()
@@ -108,7 +113,9 @@ func loadFeedPage(ctx context.Context, cache FeedCache, scene domainfeed.Scene, 
 		}
 
 		// 写缓存
-		_ = cache.SetPage(ctx, cacheKey, page, feedPageCacheTTL(cursor, cacheKey, firstPageTTL, pageTTL))
+		if err := cache.SetPage(ctx, cacheKey, page, feedPageCacheTTL(cursor, cacheKey, firstPageTTL, pageTTL)); err != nil {
+			zap.L().Warn("failed to set feed page cache.", zap.Error(err), zap.String("cache_key", cacheKey))
+		}
 		return page, nil
 	})
 	if err != nil {

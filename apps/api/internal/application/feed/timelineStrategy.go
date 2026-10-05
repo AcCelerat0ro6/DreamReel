@@ -3,10 +3,10 @@ package applicationfeed
 import (
 	domainfeed "DreamReel/internal/domain/feed"
 	"context"
-	"internal/singleflight"
 	"time"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 type timelineCursorPayload struct {
@@ -52,6 +52,7 @@ func (s *TimelineStrategy) List(ctx context.Context, req FeedRequest) (*FeedResu
 	}
 	items, err := assembleFeedItems(ctx, s.repo, s.cache, page.Items, req.ViewerID)
 	if err != nil {
+		zap.L().Error("error while assembleFeedItems: ", zap.Error(err))
 		return nil, ErrLoadFeedFailed
 	}
 	return &FeedResult{
@@ -78,7 +79,7 @@ func (s *TimelineStrategy) listPageFromRepo(ctx context.Context, parsedCursor *d
 	}
 
 	var NextCursor string
-	if len(items) > 0 {
+	if hasMore && len(items) > 0 {
 		// cursor记录最后一条视频卡片数据， 在下一页查找时会跳过它
 		NextCursor = encodeTimelineCursor(&domainfeed.TimelineCursor{
 			PublishedAt: items[len(items)-1].PublishedAt,
@@ -108,10 +109,20 @@ func assembleFeedItems(ctx context.Context, repo domainfeed.Repository, cache Fe
 	if cache != nil {
 		if cacheCards, err := cache.GetCards(ctx, videoIDs); err == nil {
 			cards = cacheCards
+		} else {
+			zap.L().Warn("failed to get feed cards from cache, falling back to repository.", zap.Error(err))
 		}
 		if cacheStats, err := cache.GetStats(ctx, videoIDs); err == nil {
 			stats = cacheStats
+		} else {
+			zap.L().Warn("failed to get feed stats from cache, falling back to repository.", zap.Error(err))
 		}
+	}
+	if cards == nil {
+		cards = map[int64]*domainfeed.FeedCard{}
+	}
+	if stats == nil {
+		stats = map[int64]*domainfeed.FeedStat{}
 	}
 
 	// 补齐缓存中不存在的卡片 并将其写回缓存。
@@ -139,8 +150,57 @@ func assembleFeedItems(ctx context.Context, repo domainfeed.Repository, cache Fe
 		}
 	}
 
-	//
+	// 获取当前用户对这批视频的历史互动情况
+	viewerActions := map[int64]*domainfeed.ViewerActionState{}
+	if viewerID > 0 {
+		loaderViewerActions, err := repo.BatchGetViewerActions(ctx, viewerID, videoIDs)
+		if err != nil {
+			return nil, err
+		}
+		viewerActions = loaderViewerActions
+	}
 
+	items := make([]*domainfeed.FeedItem, 0, len(pageItems))
+	for _, pageItem := range pageItems {
+		if pageItem == nil {
+			continue
+		}
+		card, ok := cards[pageItem.VideoID]
+		if !ok || card == nil {
+			continue
+		}
+		stat := stats[pageItem.VideoID]
+		if stat == nil {
+			stat = &domainfeed.FeedStat{VideoID: pageItem.VideoID}
+		}
+		publishedAt := pageItem.PublishedAt
+		if publishedAt.IsZero() {
+			publishedAt = card.PublishedAt
+		}
+		// 将Stat与Card拼凑得到共前端展示的FeedItem
+		item := domainfeed.TurnCardAndStatIntoFeedItem(
+			card.VideoID,
+			card.AuthorID,
+			card.AuthorNickname,
+			card.AuthorAvatarURL,
+			card.Title,
+			card.Description,
+			card.MediaURL,
+			card.CoverURL,
+			card.ModelName,
+			stat.LikeCount,
+			stat.CommentCount,
+			stat.FavoriteCount,
+			publishedAt,
+		)
+		if action := viewerActions[item.VideoID]; action != nil {
+			item.Liked = action.Liked
+			item.Favorited = action.Favorited
+		}
+		item.HotScore = pageItem.HotScore
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 func feedPageVideoIDs(items []*domainfeed.FeedPageItem) []int64 {

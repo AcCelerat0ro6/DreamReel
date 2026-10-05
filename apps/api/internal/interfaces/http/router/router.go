@@ -10,9 +10,11 @@ import (
 	jwt "DreamReel/internal/infra/jwt"
 	"DreamReel/internal/infra/metrics"
 	infraaccount "DreamReel/internal/infra/persistence/account"
+	infrafeed "DreamReel/internal/infra/persistence/feed"
 	"DreamReel/internal/infra/persistence/migration"
 	infravideo "DreamReel/internal/infra/persistence/video"
 	interfaceshttpaccount "DreamReel/internal/interfaces/http/account"
+	interfacehttpfeed "DreamReel/internal/interfaces/http/feed"
 	"DreamReel/internal/interfaces/http/middleware"
 	interfacehttpvideo "DreamReel/internal/interfaces/http/video"
 
@@ -65,14 +67,24 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	videoRepo := infravideo.New(gormDB)
 	videoService := applicationvideo.New(videoRepo)
 	videoHandler := interfacehttpvideo.New(videoService)
+
 	// ============================================================
-	// 3. 中间件
+	// 4. Feed 域：时间线、关注流、热榜、推荐流
+	//    Option 集中装配：
+	//      - Recommender        （必需，来自 Recommendation 域）
+	//      - FeedCache          （Redis 可用时）
+	// ============================================================
+	feedRepo := infrafeed.New(gormDB)
+	feedHandler := interfacehttpfeed.New(feedService)
+	
+	// ============================================================
+	// 5. 中间件
 	// ============================================================
 	authMiddleware := middleware.NewJWTAuth(jwtManager)
 	optionalAuthMiddleware := middleware.NewOptionalJWTAuth(jwtManager)
 
 	// ============================================================
-	// 4. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
+	// 6. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
 	// ============================================================
 
 	api := g.Group("/api")

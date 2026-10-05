@@ -8,8 +8,13 @@ import (
 )
 
 type Service struct {
-	strategies map[domainfeed.Scene]Strategy
+	repo         domainfeed.Repository
+	strategies   map[domainfeed.Scene]Strategy
+	defaultScene domainfeed.Scene
 }
+
+// Option 用于在装配阶段注册额外 Feed 策略。
+type Option func(*Service)
 
 func (s *Service) GetFeed(ctx context.Context, request FeedRequest) (*FeedResult, error) {
 	start := time.Now()

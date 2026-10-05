@@ -2,6 +2,7 @@ package migration
 
 import (
 	infraaccount "DreamReel/internal/infra/persistence/account"
+	infrafeed "DreamReel/internal/infra/persistence/feed"
 	infravideo "DreamReel/internal/infra/persistence/video"
 	"errors"
 	"time"
@@ -28,6 +29,7 @@ func autoMigrateModels(db *gorm.DB) error {
 			&infraaccount.UserModel{},
 			&infravideo.VideoModel{},
 			&infravideo.VideoStatModel{},
+			&infrafeed.InboxModel{},
 		)
 		if err == nil {
 			return nil

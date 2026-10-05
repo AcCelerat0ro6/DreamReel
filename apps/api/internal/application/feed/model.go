@@ -13,6 +13,7 @@ const (
 	timelineFirstPageCacheTTL = 5 * time.Second
 	timelinePageCacheTTL      = 45 * time.Second
 	feedCardCacheTTL          = 15 * time.Minute
+	feedStatCacheTTL          = 15 * time.Second
 )
 
 // FeedRequest 是所有 Feed 场景共用的查询参数。
@@ -54,4 +55,5 @@ type FeedCache interface {
 	SetCards(ctx context.Context, cards map[int64]*domainfeed.FeedCard, ttl time.Duration) error
 	GetStats(ctx context.Context, videoIDs []int64) (map[int64]*domainfeed.FeedStat, error)
 	SetStats(ctx context.Context, stats map[int64]*domainfeed.FeedStat, ttl time.Duration) error
+	ListHotWindowPage(ctx context.Context, windowEnd time.Time, offset int, limit int) ([]*domainfeed.FeedPageItem, error)
 }
