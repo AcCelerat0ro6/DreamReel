@@ -180,3 +180,20 @@ func mergeStats(target, source map[int64]*domainfeed.FeedStat) {
 		}
 	}
 }
+
+// encodeHotCursor 把热榜排序字段编码成 URL 安全的游标字符串。
+func encodeHotCursor(cursor *domainfeed.HotCursor) string {
+	if cursor == nil || cursor.VideoID <= 0 || cursor.PublishedAt.IsZero() {
+		return ""
+	}
+
+	content, err := json.Marshal(hotCursorPayload{
+		HotScore:    cursor.HotScore,
+		PublishedAt: cursor.PublishedAt.UTC().Format(time.RFC3339Nano),
+		VideoID:     cursor.VideoID,
+	})
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(content)
+}

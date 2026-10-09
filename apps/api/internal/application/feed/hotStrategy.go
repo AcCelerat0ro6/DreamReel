@@ -163,4 +163,29 @@ func encodeHotWindowCursor(cursor *domainfeed.HotCursor) string {
 // listPageFromRepo 走基础数据累计热度查询视频页
 func (s *HotStrategy) listPageFromRepo(ctx context.Context, parsedCursor *domainfeed.HotCursor, limit int) (*FeedPage, error) {
 	items, err := s.repo.ListHotPage(ctx, parsedCursor, limit+1)
+	if err != nil {
+		return nil, ErrLoadFeedFailed
+	}
+
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+
+	nextCursor := ""
+	if len(items) > 0 {
+		last := items[len(items)-1]
+		nextCursor = encodeHotCursor(&domainfeed.HotCursor{
+			HotScore:    last.HotScore,
+			PublishedAt: last.PublishedAt,
+			VideoID:     last.VideoID,
+		})
+	}
+
+	return &FeedPage{
+		Scene:      domainfeed.SceneHot,
+		Items:      items,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
 }

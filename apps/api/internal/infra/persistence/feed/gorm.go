@@ -3,6 +3,7 @@ package infrafeed
 import (
 	domainfeed "DreamReel/internal/domain/feed"
 	domaininteraction "DreamReel/internal/domain/interaction"
+	domainrelation "DreamReel/internal/domain/relation"
 	domainvideo "DreamReel/internal/domain/video"
 	"context"
 	"fmt"
@@ -189,4 +190,48 @@ func (r *Repository) baseHotPageQuery(ctx context.Context) *gorm.DB {
 		Select("v.id AS video_id, v.author_id, ("+hotScoreExpression+") AS hot_score, v.published_at").
 		Joins("LEFT JOIN video_stat AS vs ON vs.video_id = v.id").
 		Where("v.status = ? AND v.published_at IS NOT NULL", domainvideo.StatusPublished)
+}
+
+// ListFollowingPullAuthorIDs从数据库中获取指定viewer 的关注作者ID列表
+func (r *Repository) ListFollowingPullAuthorIDs(ctx context.Context, viewerID int64) ([]int64, error) {
+	var authorIDs []int64
+	err := r.db.WithContext(ctx).
+		Table("user_follow AS f").
+		Select("f.target_user_id").
+		Joins("JOIN user_relation_stat AS rs ON rs.user_id = f.target_user_id").
+		Where("f.user_id = ? AND f.status = ? AND rs.follower_count >= ?", viewerID, domainrelation.FollowStatusActive, domainfeed.BigCreatorFollowerThreshold).
+		Order("f.target_user_id ASC").
+		Scan(&authorIDs).
+		Error
+	return authorIDs, err
+}
+
+// ListFollowingPage 从数据库中按关注关系读取关注流, 作为缓存失效的备选兜底
+func (r *Repository) ListFollowingPage(ctx context.Context, viewerID int64, cursor *domainfeed.TimelineCursor, limit int) ([]*domainfeed.FeedPageItem, error) {
+	var models []domainfeed.FeedPageItem
+	query := r.db.WithContext(ctx).
+		Table("video AS v").
+		Select("v.id AS video_id, v.author_id, v.published_at").
+		Joins("JOIN user_follow AS f ON f.target_user_id = v.author_id").
+		Where("f.user_id = ? AND f.status = ? AND v.status = ? AND v.published_at IS NOT NULL", viewerID, domainrelation.FollowStatusActive, domainvideo.StatusPublished)
+
+	if cursor != nil {
+		query = query.Where(
+			"(v.published_at < ? OR (v.published_at = ? AND v.id < ?))",
+			cursor.PublishedAt,
+			cursor.PublishedAt,
+			cursor.VideoID,
+		)
+	}
+
+	err := query.
+		Order("v.published_at DESC").
+		Order("v.id DESC").
+		Limit(limit).
+		Scan(&models).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return feedPageItemsFromModels(models), nil
 }

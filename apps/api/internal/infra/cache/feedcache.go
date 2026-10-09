@@ -7,7 +7,9 @@ import (
 	"DreamReel/internal/infra/metrics"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -364,4 +366,108 @@ func (c *FeedCache) rebuildHotWindow(ctx context.Context, windowKey string, wind
 	pipe.Expire(ctx, windowKey, hotWindowCacheTTL)
 	_, err := pipe.Exec(ctx)
 	return err
+}
+
+func (c *FeedCache) ListFollowingIndexPage(ctx context.Context, viewerID int64, authorIDs []int64, cursor *domainfeed.TimelineCursor, limit int) ([]*domainfeed.FeedPageItem, bool, error) {
+	if viewerID <= 0 || limit <= 0 {
+		return []*domainfeed.FeedPageItem{}, false, nil
+	}
+	// keys包括推收件箱和拉收件箱
+	keys := []string{followingInboxKey(viewerID)}
+	for _, authorID := range authorIDs {
+		if authorID > 0 {
+			keys = append(keys, followingAuthorOutboxKey(authorID))
+		}
+	}
+
+	pipe := c.client.Pipeline()
+	cardinalityCommands := make([]*redis.IntCmd, 0, len(keys))
+	rangeCommands := make([]*redis.StringSliceCmd, 0, len(keys))
+	minScore := "-inf"
+	maxScore := "+inf"
+	if cursor != nil {
+		// 游标与TimelineStrategy一致,限定分数最大值，使得当前查询到的视频ID在之前查询到的视频ID之后
+		maxScore = fmt.Sprintf("(%f", followingIndexScore(cursor.PublishedAt, cursor.VideoID))
+	}
+	for _, key := range keys {
+		cardinalityCommands = append(cardinalityCommands, pipe.ZCard(ctx, key))
+		rangeCommands = append(rangeCommands, pipe.ZRevRangeByScore(ctx, key, &redis.ZRangeBy{
+			Min:   minScore,
+			Max:   maxScore,
+			Count: int64(limit),
+		}))
+	}
+
+	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+		return nil, false, err
+	}
+
+	hasIndex := false
+	for _, cmd := range cardinalityCommands {
+		count, err := cmd.Result()
+		if err != nil && err != redis.Nil {
+			return nil, false, err
+		}
+		if count > 0 {
+			hasIndex = true
+			break
+		}
+	}
+	if !hasIndex {
+		return nil, false, nil
+	}
+
+	seen := map[int64]struct{}{}
+	items := make([]*domainfeed.FeedPageItem, 0, limit*len(rangeCommands))
+	for _, cmd := range rangeCommands {
+		members, err := cmd.Result()
+		if err != nil && err != redis.Nil {
+			return nil, false, err
+		}
+		for _, member := range members {
+			item, ok := feedPageItemFromFollowingMember(member)
+			if !ok {
+				continue
+			}
+			if _, exists := seen[item.VideoID]; exists {
+				continue
+			}
+			seen[item.VideoID] = struct{}{}
+			items = append(items, item)
+		}
+	}
+	// 对于每一个Key对应的视频组，他们是有序的，但是组合后返回的总视频组要求全局有序
+	sortFeedPageItemsByTimeline(items)
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items, true, nil
+}
+
+func feedPageItemFromFollowingMember(member string) (*domainfeed.FeedPageItem, bool) {
+	parts := strings.SplitN(member, ":", 3)
+	if len(parts) != 2 && len(parts) != 3 {
+		return nil, false
+	}
+	videoID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil || videoID <= 0 {
+		return nil, false
+	}
+
+	authorID := int64(0)
+	publishedAtIndex := 1
+	if len(parts) == 3 {
+		authorID, _ = strconv.ParseInt(parts[1], 10, 64)
+		publishedAtIndex = 2
+	}
+	publishedAt, err := time.Parse(time.RFC3339Nano, parts[publishedAtIndex])
+	if err != nil || publishedAt.IsZero() {
+		return nil, false
+	}
+	return &domainfeed.FeedPageItem{
+		VideoID:     videoID,
+		AuthorID:    authorID,
+		PublishedAt: publishedAt,
+	}, true
+
 }

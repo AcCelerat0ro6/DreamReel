@@ -14,4 +14,8 @@ type Repository interface {
 	BatchGetViewerActions(ctx context.Context, viewerID int64, videoIDs []int64) (map[int64]*ViewerActionState, error)
 	// ListHotPage 按热度分倒序读取轻量 Feed 页。
 	ListHotPage(ctx context.Context, cursor *HotCursor, limit int) ([]*FeedPageItem, error)
+	// ListFollowingPullAuthorIDs 查询当前用户关注的大 V 作者 ID，用于合并 Redis author outbox。
+	ListFollowingPullAuthorIDs(ctx context.Context, viewerID int64) ([]int64, error)
+	// ListFollowingPage 按发布时间倒序读取当前用户关注流，包含普通作者 inbox 和大 V 拉取结果。
+	ListFollowingPage(ctx context.Context, viewerID int64, cursor *TimelineCursor, limit int) ([]*FeedPageItem, error)
 }
