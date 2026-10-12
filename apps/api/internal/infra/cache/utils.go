@@ -43,6 +43,7 @@ func hotWindowMinuteKeys(windowEnd time.Time) []string {
 	for index := hotWindowMinutes - 1; index >= 0; index-- {
 		keys = append(keys, hotMinuteKey(windowEnd.Add(-time.Duration(index)*time.Minute)))
 	}
+	return keys
 }
 
 func hotMinuteKey(at time.Time) string {

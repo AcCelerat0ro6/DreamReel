@@ -2,7 +2,11 @@ package migration
 
 import (
 	infraaccount "DreamReel/internal/infra/persistence/account"
+	infraembedding "DreamReel/internal/infra/persistence/embedding"
+	infraexposure "DreamReel/internal/infra/persistence/exposure"
 	infrafeed "DreamReel/internal/infra/persistence/feed"
+	infrainteraction "DreamReel/internal/infra/persistence/interaction"
+	infrarelation "DreamReel/internal/infra/persistence/relation"
 	infravideo "DreamReel/internal/infra/persistence/video"
 	"errors"
 	"time"
@@ -27,9 +31,15 @@ func autoMigrateModels(db *gorm.DB) error {
 	for attempt := 0; attempt < 4; attempt++ {
 		err = db.AutoMigrate(
 			&infraaccount.UserModel{},
+			&infraembedding.VideoEmbeddingModel{},
 			&infravideo.VideoModel{},
 			&infravideo.VideoStatModel{},
 			&infrafeed.InboxModel{},
+			&infraexposure.ViewEventModel{},
+			&infraexposure.ExposureModel{},
+			&infrainteraction.ActionModel{},
+			&infrarelation.FollowModel{},
+			&infrarelation.RelationStatModel{},
 		)
 		if err == nil {
 			return nil

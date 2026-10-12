@@ -197,3 +197,10 @@ func encodeHotCursor(cursor *domainfeed.HotCursor) string {
 	}
 	return base64.RawURLEncoding.EncodeToString(content)
 }
+
+func clientContextValue(context map[string]string, key string) string {
+	if context == nil {
+		return ""
+	}
+	return context[key]
+}
