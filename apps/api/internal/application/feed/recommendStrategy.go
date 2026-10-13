@@ -5,6 +5,8 @@ import (
 	domainfeed "DreamReel/internal/domain/feed"
 	"context"
 	"errors"
+
+	"go.uber.org/zap"
 )
 
 // RecommendStrategy 使用推荐策略返回推荐流
@@ -23,6 +25,12 @@ func NewRecommendStrategy(repo domainfeed.Repository, recommender Recommender) *
 	return &RecommendStrategy{
 		repo:        repo,
 		recommender: recommender,
+	}
+}
+
+func WithRecommender(recommender Recommender) Option {
+	return func(s *Service) {
+		s.RegisterStrategy(NewRecommendStrategy(s.repo, recommender))
 	}
 }
 
@@ -61,6 +69,7 @@ func (s *RecommendStrategy) List(ctx context.Context, req FeedRequest) (*FeedRes
 	}
 	items, err := assembleFeedItems(ctx, s.repo, s.cache, pageItems, req.ViewerID)
 	if err != nil {
+		zap.L().Error("failed to assemble recommend feed items", zap.Int64("viewer_id", req.ViewerID), zap.Error(err))
 		return nil, ErrLoadFeedFailed
 	}
 	return &FeedResult{

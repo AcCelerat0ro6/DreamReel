@@ -17,6 +17,11 @@ type Handler struct {
 	service *applicationfeed.Service
 }
 
+// New 注入 Feed 应用服务。
+func New(service *applicationfeed.Service) *Handler {
+	return &Handler{service: service}
+}
+
 // ListFeedItems 列出指定 scene 的 Feed列表
 func (h *Handler) ListFeedItems(c *gin.Context) {
 	limit, err := parseLimit(c.Query("limit"))

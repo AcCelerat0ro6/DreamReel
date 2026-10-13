@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type HotStrategy struct {
@@ -56,6 +58,7 @@ func (s *HotStrategy) List(ctx context.Context, req FeedRequest) (*FeedResult, e
 	}
 	items, err := assembleFeedItems(ctx, s.repo, s.cache, page.Items, req.ViewerID)
 	if err != nil {
+		zap.L().Error("failed to assemble hot feed items", zap.Int64("viewer_id", req.ViewerID), zap.Error(err))
 		return nil, ErrLoadFeedFailed
 	}
 	return &FeedResult{

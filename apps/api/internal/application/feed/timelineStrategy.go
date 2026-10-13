@@ -24,6 +24,11 @@ type TimelineStrategy struct {
 	group        singleflight.Group
 }
 
+// Scene 返回当前策略绑定的 Feed 场景。
+func (s *TimelineStrategy) Scene() domainfeed.Scene {
+	return s.scene
+}
+
 // NewTimelineStrategy 创建一个时间线排序策略
 func NewTimelineStrategy(scene domainfeed.Scene, repo domainfeed.Repository) *TimelineStrategy {
 	return &TimelineStrategy{
@@ -93,114 +98,6 @@ func (s *TimelineStrategy) listPageFromRepo(ctx context.Context, parsedCursor *d
 		NextCursor: NextCursor,
 		HasMore:    hasMore,
 	}, nil
-}
-
-// assembleFeedItems 拼凑完整的单视频卡片
-func assembleFeedItems(ctx context.Context, repo domainfeed.Repository, cache FeedCache, pageItems []*domainfeed.FeedPageItem, viewerID int64) ([]*domainfeed.FeedItem, error) {
-	// 视频ID去重
-	videoIDs := feedPageVideoIDs(pageItems)
-	if len(videoIDs) == 0 {
-		return []*domainfeed.FeedItem{}, nil
-	}
-
-	// 首先从缓存查询
-	cards := map[int64]*domainfeed.FeedCard{}
-	stats := map[int64]*domainfeed.FeedStat{}
-	if cache != nil {
-		if cacheCards, err := cache.GetCards(ctx, videoIDs); err == nil {
-			cards = cacheCards
-		} else {
-			zap.L().Warn("failed to get feed cards from cache, falling back to repository.", zap.Error(err))
-		}
-		if cacheStats, err := cache.GetStats(ctx, videoIDs); err == nil {
-			stats = cacheStats
-		} else {
-			zap.L().Warn("failed to get feed stats from cache, falling back to repository.", zap.Error(err))
-		}
-	}
-	if cards == nil {
-		cards = map[int64]*domainfeed.FeedCard{}
-	}
-	if stats == nil {
-		stats = map[int64]*domainfeed.FeedStat{}
-	}
-
-	// 补齐缓存中不存在的卡片 并将其写回缓存。
-	missingCardIDs := fingmissingCardIDs(videoIDs, cards)
-	if len(missingCardIDs) > 0 {
-		loadedCards, err := repo.BatchGetFeedCards(ctx, missingCardIDs)
-		if err != nil {
-			return nil, err
-		}
-		mergeCards(cards, loadedCards)
-		if cache != nil {
-			_ = cache.SetCards(ctx, loadedCards, feedCardCacheTTL)
-		}
-	}
-
-	missingStatIDs := findmissingStatIDs(videoIDs, stats)
-	if len(missingStatIDs) > 0 {
-		loadedStats, err := repo.BatchGetFeedStats(ctx, missingStatIDs)
-		if err != nil {
-			return nil, err
-		}
-		mergeStats(stats, loadedStats)
-		if cache != nil {
-			_ = cache.SetStats(ctx, loadedStats, feedStatCacheTTL)
-		}
-	}
-
-	// 获取当前用户对这批视频的历史互动情况
-	viewerActions := map[int64]*domainfeed.ViewerActionState{}
-	if viewerID > 0 {
-		loaderViewerActions, err := repo.BatchGetViewerActions(ctx, viewerID, videoIDs)
-		if err != nil {
-			return nil, err
-		}
-		viewerActions = loaderViewerActions
-	}
-
-	items := make([]*domainfeed.FeedItem, 0, len(pageItems))
-	for _, pageItem := range pageItems {
-		if pageItem == nil {
-			continue
-		}
-		card, ok := cards[pageItem.VideoID]
-		if !ok || card == nil {
-			continue
-		}
-		stat := stats[pageItem.VideoID]
-		if stat == nil {
-			stat = &domainfeed.FeedStat{VideoID: pageItem.VideoID}
-		}
-		publishedAt := pageItem.PublishedAt
-		if publishedAt.IsZero() {
-			publishedAt = card.PublishedAt
-		}
-		// 将Stat与Card拼凑得到共前端展示的FeedItem
-		item := domainfeed.TurnCardAndStatIntoFeedItem(
-			card.VideoID,
-			card.AuthorID,
-			card.AuthorNickname,
-			card.AuthorAvatarURL,
-			card.Title,
-			card.Description,
-			card.MediaURL,
-			card.CoverURL,
-			card.ModelName,
-			stat.LikeCount,
-			stat.CommentCount,
-			stat.FavoriteCount,
-			publishedAt,
-		)
-		if action := viewerActions[item.VideoID]; action != nil {
-			item.Liked = action.Liked
-			item.Favorited = action.Favorited
-		}
-		item.HotScore = pageItem.HotScore
-		items = append(items, item)
-	}
-	return items, nil
 }
 
 func feedPageVideoIDs(items []*domainfeed.FeedPageItem) []int64 {

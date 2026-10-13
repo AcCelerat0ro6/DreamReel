@@ -31,6 +31,10 @@ type FeedCache struct {
 	client redisWatchCmdable
 }
 
+func NewFeedCache(client redisWatchCmdable) *FeedCache {
+	return &FeedCache{client: client}
+}
+
 // GetPage 尝试读取缓存中的轻量 Feed 页。
 func (c *FeedCache) GetPage(ctx context.Context, key string) (*applicationfeed.FeedPage, bool, error) {
 	content, err := c.client.Get(ctx, key).Bytes()
@@ -138,6 +142,30 @@ func (c *FeedCache) GetStats(ctx context.Context, videoIDs []int64) (map[int64]*
 	}
 	metrics.ObserveCacheRead("stat", len(videoIDs), len(stats), nil)
 	return stats, nil
+}
+
+// SetCards 批量写入视频卡片缓存。
+func (c *FeedCache) SetCards(ctx context.Context, cards map[int64]*domainfeed.FeedCard, ttl time.Duration) error {
+	pipe := c.client.Pipeline()
+	queued := false
+
+	for _, card := range cards {
+		if card == nil || card.VideoID <= 0 {
+			continue
+		}
+		content, err := json.Marshal(card)
+		if err != nil {
+			return err
+		}
+		pipe.Set(ctx, feedCardKey(card.VideoID), content, ttl)
+		queued = true
+	}
+	if !queued {
+		return nil
+	}
+	_, err := pipe.Exec(ctx)
+	metrics.ObserveCacheWrite("card", len(cards), err)
+	return err
 }
 
 func (c *FeedCache) actionStatFromCache(ctx context.Context, videoID int64) (*domainfeed.FeedStat, bool, error) {

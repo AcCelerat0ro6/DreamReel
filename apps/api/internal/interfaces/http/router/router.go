@@ -6,6 +6,7 @@ import (
 
 	applicationaccount "DreamReel/internal/application/account"
 	applicationvideo "DreamReel/internal/application/video"
+	cache "DreamReel/internal/infra/cache"
 	"DreamReel/internal/infra/config"
 	jwt "DreamReel/internal/infra/jwt"
 	"DreamReel/internal/infra/metrics"
@@ -14,9 +15,14 @@ import (
 	"DreamReel/internal/infra/persistence/migration"
 	infravideo "DreamReel/internal/infra/persistence/video"
 	interfaceshttpaccount "DreamReel/internal/interfaces/http/account"
-	interfacehttpfeed "DreamReel/internal/interfaces/http/feed"
+	interfaceshttpfeed "DreamReel/internal/interfaces/http/feed"
 	"DreamReel/internal/interfaces/http/middleware"
 	interfacehttpvideo "DreamReel/internal/interfaces/http/video"
+
+	applicationrecommendation "DreamReel/internal/application/recommendation"
+	infrarecommendation "DreamReel/internal/infra/persistence/recommendation"
+
+	applicationfeed "DreamReel/internal/application/feed"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -43,6 +49,12 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 		return err
 	}
 
+	// 1.3 Redis 初始化
+	var feedCache *cache.FeedCache
+	if cfg.Redis.Addr != "" {
+		redisClient := cache.NewRedisClient(cfg.Redis)
+		feedCache = cache.NewFeedCache(redisClient)
+	}
 	// ============================================================
 	// 2. Account 域：注册、登录、资料、JWT 签发
 	// ============================================================
@@ -69,22 +81,37 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	videoHandler := interfacehttpvideo.New(videoService)
 
 	// ============================================================
-	// 4. Feed 域：时间线、关注流、热榜、推荐流
+	// 4. Recommendation 域：候选召回、曝光决策、内部接口
+	//    对外暴露 recommendationService 供 Feed 域作为 Recommender。
+	// ============================================================
+
+	recommendationRepo := infrarecommendation.New(gormDB)
+	recommendationService := applicationrecommendation.New(recommendationRepo)
+	// recommendationHandler := interfaceshttprecommendation.New(recommendationService)
+	// ============================================================
+	// 5. Feed 域：时间线、关注流、热榜、推荐流
 	//    Option 集中装配：
 	//      - Recommender        （必需，来自 Recommendation 域）
 	//      - FeedCache          （Redis 可用时）
 	// ============================================================
 	feedRepo := infrafeed.New(gormDB)
-	feedHandler := interfacehttpfeed.New(feedService)
-	
+	feedOptions := []applicationfeed.Option{
+		applicationfeed.WithRecommender(recommendationService),
+	}
+	if feedCache != nil {
+		feedOptions = append(feedOptions, applicationfeed.WithFeedCache(feedCache))
+	}
+	feedService := applicationfeed.New(feedRepo, feedOptions...)
+	feedHandler := interfaceshttpfeed.New(feedService)
+
 	// ============================================================
-	// 5. 中间件
+	// 6. 中间件
 	// ============================================================
 	authMiddleware := middleware.NewJWTAuth(jwtManager)
 	optionalAuthMiddleware := middleware.NewOptionalJWTAuth(jwtManager)
 
 	// ============================================================
-	// 6. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
+	// 7. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
 	// ============================================================
 
 	api := g.Group("/api")

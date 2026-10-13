@@ -57,3 +57,24 @@ type FeedCache interface {
 	SetStats(ctx context.Context, stats map[int64]*domainfeed.FeedStat, ttl time.Duration) error
 	ListHotWindowPage(ctx context.Context, windowEnd time.Time, offset int, limit int) ([]*domainfeed.FeedPageItem, error)
 }
+
+// WithFeedCache 为 Feed 页、卡片和计数启用读缓存。
+func WithFeedCache(cache FeedCache) Option {
+	return func(s *Service) {
+		for _, strategy := range s.strategies {
+			switch typed := strategy.(type) {
+			case *TimelineStrategy:
+				typed.cache = cache
+			case *HotStrategy:
+				typed.cache = cache
+			case *FollowingStrategy:
+				typed.cache = cache
+				if index, ok := cache.(FollowingIndexCache); ok {
+					typed.followingIndex = index
+				}
+			case *RecommendStrategy:
+				typed.cache = cache
+			}
+		}
+	}
+}
