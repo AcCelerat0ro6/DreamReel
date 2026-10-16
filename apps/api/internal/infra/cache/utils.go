@@ -76,6 +76,10 @@ func followingAuthorOutboxKey(authorID int64) string {
 	return fmt.Sprintf("feed:following:author:v1:%d", authorID)
 }
 
+func followingIndexMember(videoID int64, authorID int64, publishedAt time.Time) string {
+	return fmt.Sprintf("%d:%d:%s", videoID, authorID, publishedAt.UTC().Format(time.RFC3339Nano))
+}
+
 // 按照宏观发布时间生成排序分数
 func followingIndexScore(publishedAt time.Time, videoID int64) float64 {
 	return float64(publishedAt.UTC().Unix()*1000000 + videoID%1000000)

@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	hotWindowCacheTTL = 2 * time.Minute
-	hotWindowMinutes  = 60
+	hotWindowCacheTTL    = 2 * time.Minute
+	hotWindowMinutes     = 60
+	followingIndexKeyTTL = 30 * 24 * time.Hour
 )
 
 // redis 相关接口。
@@ -498,4 +499,27 @@ func feedPageItemFromFollowingMember(member string) (*domainfeed.FeedPageItem, b
 		PublishedAt: publishedAt,
 	}, true
 
+}
+
+func (c *FeedCache) AddInboxItems(ctx context.Context, authorID int64, userIDs []int64, item *domainfeed.FeedPageItem, maxLen int64) error {
+	if authorID <= 0 || item == nil || item.VideoID <= 0 || item.PublishedAt.IsZero() || len(userIDs) == 0 {
+		return nil
+	}
+	if maxLen <= 0 {
+		maxLen = 1000
+	}
+	pipe := c.client.Pipeline()
+	score := followingIndexScore(item.PublishedAt, item.VideoID)
+	member := followingIndexMember(item.VideoID, authorID, item.PublishedAt)
+	for _, userID := range userIDs {
+		if userID <= 0 {
+			continue
+		}
+		key := followingInboxKey(userID)
+		pipe.ZAdd(ctx, key, redis.Z{Score: score, Member: member})
+		pipe.ZRemRangeByRank(ctx, key, 0, -maxLen-1)
+		pipe.Expire(ctx, key, followingIndexKeyTTL)
+	}
+	_, err := pipe.Exec(ctx)
+	return err
 }

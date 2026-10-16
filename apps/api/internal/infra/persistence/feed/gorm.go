@@ -6,8 +6,10 @@ import (
 	domainrelation "DreamReel/internal/domain/relation"
 	domainvideo "DreamReel/internal/domain/video"
 	"context"
+	"errors"
 	"fmt"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -234,4 +236,48 @@ func (r *Repository) ListFollowingPage(ctx context.Context, viewerID int64, curs
 		return nil, err
 	}
 	return feedPageItemsFromModels(models), nil
+}
+
+// ListAuthorRecentVideos 查询作者最近公开视频，用于新关注小作者时回填当前用户 inbox。
+func (r *Repository) ListAuthorRecentVideos(ctx context.Context, authorID int64, limit int) ([]*domainfeed.FeedPageItem, error) {
+	if authorID <= 0 || limit <= 0 {
+		return []*domainfeed.FeedPageItem{}, nil
+	}
+
+	var models []domainfeed.FeedPageItem
+	err := r.db.WithContext(ctx).
+		Table("video AS v").
+		Select("v.id AS video_id, v.author_id, v.published_at").
+		Where("v.author_id = ? AND v.status = ? AND v.published_at IS NOT NULL", authorID, domainvideo.StatusPublished).
+		Order("v.published_at DESC").
+		Order("v.id DESC").
+		Limit(limit).
+		Scan(&models).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return feedPageItemsFromModels(models), nil
+}
+
+// CountFollowers 获取粉丝数量。
+func (r *Repository) CountFollowers(ctx context.Context, authorID int64) (int, error) {
+	var count int
+	err := r.db.WithContext(ctx).
+		Table("user_relation_stat").
+		Select("follower_count").
+		Where("user_id = ?", authorID).
+		Take(&count).
+		Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		zap.L().Error("count followers failed",
+			zap.Int64("author_id", authorID),
+			zap.Error(err),
+		)
+		return 0, err
+	}
+	return count, nil
 }

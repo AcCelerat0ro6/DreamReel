@@ -31,3 +31,19 @@ type RelationStatModel struct {
 func (RelationStatModel) TableName() string {
 	return "user_relation_stat"
 }
+
+type relationUserModel struct {
+	UserID     int64
+	Nickname   string
+	AvatarURL  string
+	Bio        string
+	FollowedAt time.Time
+}
+
+// relationUserProfileModel 用户展示资料模型。
+type relationUserProfileModel struct {
+	UserID    int64
+	Nickname  string
+	AvatarURL string
+	Bio       string
+}

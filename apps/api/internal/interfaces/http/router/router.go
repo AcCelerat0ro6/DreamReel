@@ -1,11 +1,13 @@
 package router
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 
 	applicationaccount "DreamReel/internal/application/account"
 	applicationvideo "DreamReel/internal/application/video"
+	domainfeed "DreamReel/internal/domain/feed"
 	cache "DreamReel/internal/infra/cache"
 	"DreamReel/internal/infra/config"
 	jwt "DreamReel/internal/infra/jwt"
@@ -17,12 +19,16 @@ import (
 	interfaceshttpaccount "DreamReel/internal/interfaces/http/account"
 	interfaceshttpfeed "DreamReel/internal/interfaces/http/feed"
 	"DreamReel/internal/interfaces/http/middleware"
+	interfacehttprelation "DreamReel/internal/interfaces/http/relation"
 	interfacehttpvideo "DreamReel/internal/interfaces/http/video"
 
 	applicationrecommendation "DreamReel/internal/application/recommendation"
 	infrarecommendation "DreamReel/internal/infra/persistence/recommendation"
 
 	applicationfeed "DreamReel/internal/application/feed"
+
+	applicationrelation "DreamReel/internal/application/relation"
+	infrarelation "DreamReel/internal/infra/persistence/relation"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -105,13 +111,34 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	feedHandler := interfaceshttpfeed.New(feedService)
 
 	// ============================================================
-	// 6. 中间件
+	// 6. Relation 域：关注、粉丝、关注流回填
+	//    Option 集中装配：
+	//      - MessageWriter          （必需，来自 Message 域）
+	//      - FollowFeedBackfiller   （Redis 可用时，复用 feedRepo）
+	// ============================================================
+	relationRepo := infrarelation.New(gormDB)
+	/*
+		relationOptions := []applicationrelation.Option{
+			applicationrelation.WithMessageWriter(messageWriter),
+		}
+	*/
+	var relationOptions []applicationrelation.Option
+	if feedCache != nil {
+		relationOptions = append(relationOptions,
+			applicationrelation.WithFollowFeedBackfiller(NewFollowFeedBackfiller(feedRepo, feedCache)),
+		)
+	}
+	relationService := applicationrelation.New(relationRepo, relationOptions...)
+	relationHandler := interfacehttprelation.New(relationService)
+
+	// ============================================================
+	// 7. 中间件
 	// ============================================================
 	authMiddleware := middleware.NewJWTAuth(jwtManager)
 	optionalAuthMiddleware := middleware.NewOptionalJWTAuth(jwtManager)
 
 	// ============================================================
-	// 7. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
+	// 8. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
 	// ============================================================
 
 	api := g.Group("/api")
@@ -124,6 +151,8 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	// 用户资源承载注册、当前用户资料和用户作品列表。
 	users := api.Group("/users")
 	users.POST("", accountHandler.Register)
+	users.PUT("/me/following/:targetUserId", authMiddleware, relationHandler.Follow)
+	users.DELETE("/me/following/:targetUserId", authMiddleware, relationHandler.Unfollow)
 
 	// 视频资源
 	videos := api.Group("/videos")
@@ -159,5 +188,36 @@ func HealthCheck(db *sql.DB, rdb *redis.Client) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "The server is running normally."})
+	}
+}
+
+func NewFollowFeedBackfiller(feedRepo interface {
+	CountFollowers(ctx context.Context, authorID int64) (int, error)
+	ListAuthorRecentVideos(ctx context.Context, authorID int64, limit int) ([]*domainfeed.FeedPageItem, error)
+}, feedCache interface {
+	AddInboxItems(ctx context.Context, authorID int64, userIDs []int64, item *domainfeed.FeedPageItem, maxLen int64) error
+}) *FollowFeedBackfiller {
+	return &FollowFeedBackfiller{feedRepo: feedRepo, feedCache: feedCache}
+}
+
+func (b *FollowFeedBackfiller) CountFollowers(ctx context.Context, authorID int64) (int, error) {
+	return b.feedRepo.CountFollowers(ctx, authorID)
+}
+
+func (b *FollowFeedBackfiller) ListAuthorRecentVideos(ctx context.Context, authorID int64, limit int) ([]*domainfeed.FeedPageItem, error) {
+	return b.feedRepo.ListAuthorRecentVideos(ctx, authorID, limit)
+}
+
+func (b *FollowFeedBackfiller) AddInboxItems(ctx context.Context, authorID int64, userIDs []int64, item *domainfeed.FeedPageItem, maxLen int64) error {
+	return b.feedCache.AddInboxItems(ctx, authorID, userIDs, item, maxLen)
+}
+
+type FollowFeedBackfiller struct {
+	feedRepo interface {
+		CountFollowers(ctx context.Context, authorID int64) (int, error)
+		ListAuthorRecentVideos(ctx context.Context, authorID int64, limit int) ([]*domainfeed.FeedPageItem, error)
+	}
+	feedCache interface {
+		AddInboxItems(ctx context.Context, authorID int64, userIDs []int64, item *domainfeed.FeedPageItem, maxLen int64) error
 	}
 }
