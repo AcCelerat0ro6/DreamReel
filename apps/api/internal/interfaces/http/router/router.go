@@ -6,18 +6,22 @@ import (
 	"net/http"
 
 	applicationaccount "DreamReel/internal/application/account"
+	applicationinteraction "DreamReel/internal/application/interaction"
 	applicationvideo "DreamReel/internal/application/video"
 	domainfeed "DreamReel/internal/domain/feed"
 	cache "DreamReel/internal/infra/cache"
 	"DreamReel/internal/infra/config"
 	jwt "DreamReel/internal/infra/jwt"
 	"DreamReel/internal/infra/metrics"
+	"DreamReel/internal/infra/mq"
 	infraaccount "DreamReel/internal/infra/persistence/account"
 	infrafeed "DreamReel/internal/infra/persistence/feed"
+
 	"DreamReel/internal/infra/persistence/migration"
 	infravideo "DreamReel/internal/infra/persistence/video"
 	interfaceshttpaccount "DreamReel/internal/interfaces/http/account"
 	interfaceshttpfeed "DreamReel/internal/interfaces/http/feed"
+	interfacehttpinteraction "DreamReel/internal/interfaces/http/interaction"
 	"DreamReel/internal/interfaces/http/middleware"
 	interfacehttprelation "DreamReel/internal/interfaces/http/relation"
 	interfacehttpvideo "DreamReel/internal/interfaces/http/video"
@@ -30,8 +34,11 @@ import (
 	applicationrelation "DreamReel/internal/application/relation"
 	infrarelation "DreamReel/internal/infra/persistence/relation"
 
+	infrainteraction "DreamReel/internal/infra/persistence/interaction"
+
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -61,6 +68,18 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 		redisClient := cache.NewRedisClient(cfg.Redis)
 		feedCache = cache.NewFeedCache(redisClient)
 	}
+
+	// 1.4 RabbitMQ 初始化
+	// RabbitMQ 客户端：供 Video/Exposure/Interaction 三个模块发布事件。
+	var rabbitMQ *mq.RabbitMQ
+	if cfg.RabbitMQ.URL != "" {
+		rabbitMQ, err = mq.NewRabbitMQ(cfg.RabbitMQ)
+		if err != nil {
+			zap.L().Error("failed to create rabbitmq client", zap.Error(err))
+			rabbitMQ = nil
+		}
+	}
+
 	// ============================================================
 	// 2. Account 域：注册、登录、资料、JWT 签发
 	// ============================================================
@@ -132,13 +151,42 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	relationHandler := interfacehttprelation.New(relationService)
 
 	// ============================================================
-	// 7. 中间件
+	// 7. Interaction 域：点赞、收藏、评论、热度分、异步落库
+	//    Option 集中装配：
+	//      - MessageWriter        （必需，来自 Message 域）
+	//      - HotScoreRecorder     （Redis 可用时）
+	//      - StatCache            （Redis 可用时）
+	//      - AsyncActionPipeline  （Redis 和 RabbitMQ 同时可用时）
+	// ============================================================
+	interactionRepo := infrainteraction.New(gormDB)
+	/*
+		interactionOptions := []applicationinteraction.Option{
+			applicationinteraction.WithMessageWriter(messageWriter),
+		}
+	*/
+	var interactionOptions []applicationinteraction.Option
+	if feedCache != nil {
+		interactionOptions = append(interactionOptions,
+			applicationinteraction.WithHotScoreRecorder(feedCache),
+			// applicationinteraction.WithStatCache(feedCache),
+		)
+		if rabbitMQ != nil {
+			interactionOptions = append(interactionOptions,
+				applicationinteraction.WithAsyncActionPipeline(feedCache, rabbitMQ),
+			)
+		}
+	}
+	interactionService := applicationinteraction.New(interactionRepo, interactionOptions...)
+	interactionHandler := interfacehttpinteraction.New(interactionService)
+
+	// ============================================================
+	// 8. 中间件
 	// ============================================================
 	authMiddleware := middleware.NewJWTAuth(jwtManager)
 	optionalAuthMiddleware := middleware.NewOptionalJWTAuth(jwtManager)
 
 	// ============================================================
-	// 8. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
+	// 9. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
 	// ============================================================
 
 	api := g.Group("/api")
@@ -159,6 +207,10 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client) 
 	videos.POST("", authMiddleware, videoHandler.Create)
 	videos.DELETE("/:videoId", authMiddleware, videoHandler.Delete)
 	videos.GET("/:videoId", videoHandler.Get)
+	videos.PUT("/:videoId/like", authMiddleware, interactionHandler.Like)
+	videos.DELETE("/:videoId/like", authMiddleware, interactionHandler.Unlike)
+	videos.PUT("/:videoId/favorite", authMiddleware, interactionHandler.Favorite)
+	videos.DELETE("/:videoId/favorite", authMiddleware, interactionHandler.Unfavorite)
 
 	// Feed流资源 用户通过游标控制获取视频列表
 	api.GET("/feed-items", optionalAuthMiddleware, feedHandler.ListFeedItems)

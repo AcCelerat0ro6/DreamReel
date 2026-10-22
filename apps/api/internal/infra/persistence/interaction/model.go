@@ -20,3 +20,9 @@ type ActionModel struct {
 func (ActionModel) TableName() string {
 	return "interaction_action"
 }
+
+type userProfileModel struct {
+	ID        int64
+	Nickname  string
+	AvatarURL string
+}

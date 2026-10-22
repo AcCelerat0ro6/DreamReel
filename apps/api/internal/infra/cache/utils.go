@@ -2,6 +2,7 @@ package cache
 
 import (
 	domainfeed "DreamReel/internal/domain/feed"
+	domaininteraction "DreamReel/internal/domain/interaction"
 	"fmt"
 	"sort"
 	"strconv"
@@ -76,6 +77,11 @@ func followingAuthorOutboxKey(authorID int64) string {
 	return fmt.Sprintf("feed:following:author:v1:%d", authorID)
 }
 
+// 记录单个目标用户对单个视频行为Key
+func interactionActionKey(userID int64, videoID int64, actionType string) string {
+	return fmt.Sprintf("interaction:action:v1:%d:%d:%s", userID, videoID, strings.ToLower(actionType))
+}
+
 func followingIndexMember(videoID int64, authorID int64, publishedAt time.Time) string {
 	return fmt.Sprintf("%d:%d:%s", videoID, authorID, publishedAt.UTC().Format(time.RFC3339Nano))
 }
@@ -141,4 +147,31 @@ func sortFeedPageItemsByTimeline(items []*domainfeed.FeedPageItem) {
 		}
 		return items[i].PublishedAt.After(items[j].PublishedAt)
 	})
+}
+
+// 获取当前要访问的Stat分片Index
+func interactionStatCounterShardIndex(userID int64) int {
+	if userID <= 0 {
+		return 0
+	}
+	// 使用用户ID的哈希值来确定分片索引
+	return int(userID % actionStatCounterShardCount)
+}
+
+func actionStatBaseInit(videoID int64, initialStat *domaininteraction.VideoStat) *domaininteraction.VideoStat {
+	if initialStat != nil {
+		return initialStat
+	}
+	return &domaininteraction.VideoStat{VideoID: videoID}
+}
+
+func interactionStatField(actionType string) string {
+	if actionType == domaininteraction.ActionTypeLike {
+		return "like_count"
+	}
+	return "favorite_count"
+}
+
+func hotRankMember(videoID int64) string {
+	return fmt.Sprintf("%020d", videoID)
 }

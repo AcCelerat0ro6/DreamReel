@@ -2,6 +2,7 @@ package cache
 
 import (
 	applicationfeed "DreamReel/internal/application/feed"
+	applicationinteraction "DreamReel/internal/application/interaction"
 	domainfeed "DreamReel/internal/domain/feed"
 	domaininteraction "DreamReel/internal/domain/interaction"
 	"DreamReel/internal/infra/metrics"
@@ -19,6 +20,9 @@ const (
 	hotWindowCacheTTL    = 2 * time.Minute
 	hotWindowMinutes     = 60
 	followingIndexKeyTTL = 30 * 24 * time.Hour
+	actionStateTTL       = 30 * 24 * time.Hour
+	actionStatTTL        = 24 * time.Hour
+	hotMinuteBucketTTL   = 2 * time.Hour
 )
 
 // redis 相关接口。
@@ -34,6 +38,15 @@ type FeedCache struct {
 
 func NewFeedCache(client redisWatchCmdable) *FeedCache {
 	return &FeedCache{client: client}
+}
+
+type redisActionStatReader interface {
+	HGetAll(ctx context.Context, key string) *redis.MapStringStringCmd
+	Get(ctx context.Context, key string) *redis.StringCmd
+}
+
+type redisActionStatWriter interface {
+	Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd
 }
 
 // GetPage 尝试读取缓存中的轻量 Feed 页。
@@ -170,10 +183,10 @@ func (c *FeedCache) SetCards(ctx context.Context, cards map[int64]*domainfeed.Fe
 }
 
 func (c *FeedCache) actionStatFromCache(ctx context.Context, videoID int64) (*domainfeed.FeedStat, bool, error) {
-	return c.actionStatWithPresence(ctx, interactionStatCounterBaseKey(videoID), interactionStatCounterShardKeys(videoID), feedStatKey(videoID), videoID, nil)
+	return c.actionStatWithPresence(ctx, interactionStatCounterBaseKey(videoID), interactionStatCounterShardKeys(videoID), feedStatKey(videoID), videoID, nil, "", 0)
 }
 
-func (c *FeedCache) actionStatWithPresence(ctx context.Context, counterBaseKey string, counterShardKeys []string, jsonKey string, videoID int64, initialStat *domaininteraction.VideoStat) (*domainfeed.FeedStat, bool, error) {
+func (c *FeedCache) actionStatWithPresence(ctx context.Context, counterBaseKey string, counterShardKeys []string, jsonKey string, videoID int64, initialStat *domaininteraction.VideoStat, actionType string, delta int) (*domainfeed.FeedStat, bool, error) {
 	stat := &domainfeed.FeedStat{VideoID: videoID}
 	found := false
 	result, err := c.client.HGetAll(ctx, counterBaseKey).Result()
@@ -185,12 +198,18 @@ func (c *FeedCache) actionStatWithPresence(ctx context.Context, counterBaseKey s
 		applyActionStatFields(stat, result)
 		found = true
 	} else {
-		// 未找到基准计数缓存， 二次查找完整计数缓存
-		fallbackStat, ok, err := c.actionStatFallback(ctx, jsonKey, videoID, initialStat)
+		// 未找到基准计数缓存
+		fallbackStat, fromJSON, err := c.actionStatFallback(ctx, jsonKey, videoID, initialStat)
 		if err != nil {
 			return nil, false, err
 		}
-		if ok {
+		if fallbackStat != nil {
+			if fromJSON {
+				// 找到上一个完整计数缓存，并加上delta后直接返回
+				applyActionStatDelta(fallbackStat, actionType, delta)
+				return fallbackStat, true, nil
+			}
+			// 未找到完整计数缓存 将数据库中的initial_stat作为新的Base
 			stat = fallbackStat
 			found = true
 		}
@@ -211,12 +230,12 @@ func (c *FeedCache) actionStatWithPresence(ctx context.Context, counterBaseKey s
 func (c *FeedCache) actionStatFallback(ctx context.Context, jsonKey string, videoID int64, initialStat *domaininteraction.VideoStat) (*domainfeed.FeedStat, bool, error) {
 	stat := &domainfeed.FeedStat{VideoID: videoID}
 	content, err := c.client.Get(ctx, jsonKey).Bytes()
-	if err != redis.Nil {
+	if err == redis.Nil {
 		if initialStat != nil {
 			stat.LikeCount = initialStat.LikeCount
 			stat.CommentCount = initialStat.CommentCount
 			stat.FavoriteCount = initialStat.FavoriteCount
-			return stat, true, nil
+			return stat, false, nil
 		}
 		return nil, false, nil
 	}
@@ -230,6 +249,17 @@ func (c *FeedCache) actionStatFallback(ctx context.Context, jsonKey string, vide
 		stat.VideoID = videoID
 	}
 	return stat, true, nil
+}
+
+func applyActionStatDelta(stat *domainfeed.FeedStat, actionType string, delta int) {
+	if stat == nil || delta == 0 {
+		return
+	}
+	if actionType == domaininteraction.ActionTypeLike {
+		stat.LikeCount = clampRedisCount(stat.LikeCount + delta)
+		return
+	}
+	stat.FavoriteCount = clampRedisCount(stat.FavoriteCount + delta)
 }
 
 func (c *FeedCache) applyActionStatShardDeltas(ctx context.Context, stat *domainfeed.FeedStat, sharedKeys []string) (bool, error) {
@@ -522,4 +552,140 @@ func (c *FeedCache) AddInboxItems(ctx context.Context, authorID int64, userIDs [
 	}
 	_, err := pipe.Exec(ctx)
 	return err
+}
+
+// SetActionState 写入 Redis 行为状态和实时计数，供点赞收藏接口快速返回。
+func (c *FeedCache) SetActionState(ctx context.Context, userID int64, videoID int64, actionType string, active bool, idempotencyKey string, initialStat *domaininteraction.VideoStat) (*applicationinteraction.ActionStateResult, error) {
+	actionType, err := domaininteraction.NormalizeActionType(actionType)
+	if err != nil {
+		return nil, err
+	}
+
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	actionKey := interactionActionKey(userID, videoID, actionType)
+	counterBaseKey := interactionStatCounterBaseKey(videoID)
+	counterShardKey := interactionStatCounterShardKey(videoID, interactionStatCounterShardIndex(userID))
+	jsonKey := feedStatKey(videoID)
+
+	targetStatus := domaininteraction.ActionStatusCanceled
+	if active {
+		targetStatus = domaininteraction.ActionStatusActive
+	}
+
+	var result *applicationinteraction.ActionStateResult
+	// ..!
+	err = c.client.Watch(ctx, func(tx *redis.Tx) error {
+		values, err := tx.HGetAll(ctx, actionKey).Result()
+		if err != nil {
+			return err
+		}
+		storedStatus, _ := strconv.Atoi(values["status"])
+		storedIDKey := values["idempotency_key"]
+		effectiveActive := active
+		effectiveStatus := targetStatus
+		delta := 0
+		// 计算delta
+		if storedIDKey == idempotencyKey && idempotencyKey != "" {
+			effectiveActive = storedStatus == domaininteraction.ActionStatusActive
+			effectiveStatus = storedStatus
+			delta = 0
+		} else {
+			if storedStatus == 0 {
+				if active {
+					delta = 1
+				}
+			} else if storedStatus != targetStatus {
+				if active {
+					delta = 1
+				} else {
+					delta = -1
+				}
+			}
+		}
+
+		baseStat := actionStatBaseInit(videoID, initialStat)
+
+		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+			// 更新用户点赞/收藏视频行为
+			pipe.HSet(ctx, actionKey, map[string]any{
+				"status":          effectiveStatus,
+				"idempotency_key": idempotencyKey,
+				"updated_at":      time.Now().UTC().Format(time.RFC3339Nano),
+			})
+			pipe.Expire(ctx, actionKey, actionStateTTL)
+			// 填充Base计数缓存
+			queueActionStatBaseInit(ctx, pipe, counterBaseKey, baseStat)
+			pipe.Expire(ctx, counterBaseKey, actionStatTTL)
+			if delta != 0 {
+				pipe.HIncrBy(ctx, counterShardKey, interactionStatField(actionType), int64(delta))
+			}
+			pipe.Expire(ctx, counterShardKey, actionStatTTL)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		result = &applicationinteraction.ActionStateResult{
+			VideoID:        videoID,
+			ActionType:     actionType,
+			Active:         effectiveActive,
+			Delta:          delta,
+			IdempotencyKey: idempotencyKey,
+		}
+		return nil
+	}, actionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// 更新FeedStat 缓存
+	// FeedStat 的更新必须在Stat分片更新结束后才能计算 因此这里的计算和更新语句在Watch之外
+	// 根据分片计算FeedStat
+	stat, err := c.actionStatWithDelta(ctx, counterBaseKey, interactionStatCounterShardKeys(videoID), jsonKey, videoID, initialStat, actionType, result.Delta)
+	if err != nil {
+		return nil, err
+	}
+	// 回填收藏/点赞结果, 并更新缓存
+	result.LikeCount = stat.LikeCount
+	result.FavoriteCount = stat.FavoriteCount
+	_ = c.setActionStatJSON(ctx, jsonKey, stat)
+	return result, nil
+}
+
+func queueActionStatBaseInit(ctx context.Context, pipe redis.Pipeliner, counterBaseKey string, initialStat *domaininteraction.VideoStat) {
+	stat := &domaininteraction.VideoStat{}
+	if initialStat != nil {
+		stat = initialStat
+	}
+	pipe.HSetNX(ctx, counterBaseKey, "like_count", stat.LikeCount)
+	pipe.HSetNX(ctx, counterBaseKey, "comment_count", stat.CommentCount)
+	pipe.HSetNX(ctx, counterBaseKey, "favorite_count", stat.FavoriteCount)
+}
+
+func (c *FeedCache) actionStat(ctx context.Context, counterBaseKey string, counterShardKeys []string, jsonKey string, videoID int64, initialStat *domaininteraction.VideoStat) (*domainfeed.FeedStat, error) {
+	return c.actionStatWithDelta(ctx, counterBaseKey, counterShardKeys, jsonKey, videoID, initialStat, "", 0)
+}
+
+func (c *FeedCache) actionStatWithDelta(ctx context.Context, counterBaseKey string, counterShardKeys []string, jsonKey string, videoID int64, initialStat *domaininteraction.VideoStat, actionType string, delta int) (*domainfeed.FeedStat, error) {
+	stat, _, err := c.actionStatWithPresence(ctx, counterBaseKey, counterShardKeys, jsonKey, videoID, initialStat, actionType, delta)
+	if err != nil {
+		return nil, err
+	}
+	if stat == nil {
+		return &domainfeed.FeedStat{VideoID: videoID}, nil
+	}
+	return stat, nil
+}
+
+// AddHotScore 为互动热度分钟桶添加计数
+func (c *FeedCache) AddHotScore(ctx context.Context, videoID int64, scoreDelta int, at time.Time) error {
+	if videoID <= 0 || scoreDelta == 0 {
+		return nil
+	}
+	key := hotMinuteKey(at)
+	if err := c.client.ZIncrBy(ctx, key, float64(scoreDelta), hotRankMember(videoID)).Err(); err != nil {
+		return err
+	}
+	return c.client.Expire(ctx, key, hotMinuteBucketTTL).Err()
 }
