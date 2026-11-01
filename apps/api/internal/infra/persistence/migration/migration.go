@@ -6,6 +6,9 @@ import (
 	infraexposure "DreamReel/internal/infra/persistence/exposure"
 	infrafeed "DreamReel/internal/infra/persistence/feed"
 	infrainteraction "DreamReel/internal/infra/persistence/interaction"
+	inframessage "DreamReel/internal/infra/persistence/message"
+	infraplayback "DreamReel/internal/infra/persistence/playback"
+	infrarecommendation "DreamReel/internal/infra/persistence/recommendation"
 	infrarelation "DreamReel/internal/infra/persistence/relation"
 	infravideo "DreamReel/internal/infra/persistence/video"
 	"errors"
@@ -40,6 +43,11 @@ func autoMigrateModels(db *gorm.DB) error {
 			&infrainteraction.ActionModel{},
 			&infrarelation.FollowModel{},
 			&infrarelation.RelationStatModel{},
+			&infrarecommendation.UserInterestProfileModel{},
+			&inframessage.MessageModel{},
+			&infrainteraction.CommentModel{},
+			&infraplayback.ConfigModel{},
+			&infraplayback.QoSLogModel{},
 		)
 		if err == nil {
 			return nil

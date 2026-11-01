@@ -93,7 +93,7 @@ func (s *Service) CreatePublished(ctx context.Context, authorID int64, title str
 		return nil, ErrSaveVideoFailed
 	}
 
-	// s.publishCreatedVideo(ctx, video)
+	s.publishCreatedVideo(ctx, video)
 
 	return &CreateResult{Video: video, Created: true}, nil
 

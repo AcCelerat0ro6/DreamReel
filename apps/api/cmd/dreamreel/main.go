@@ -12,6 +12,7 @@ import (
 	"DreamReel/internal/infra/database"
 	"DreamReel/internal/infra/httpgin"
 	"DreamReel/internal/infra/log"
+	"DreamReel/internal/infra/mq"
 	"DreamReel/internal/infra/redis"
 	"DreamReel/internal/interfaces/http/router"
 
@@ -28,7 +29,7 @@ func main() {
 	}
 }
 
-// 启动顺序：配置 -> 日志 -> 信号 ctx -> 数据库 -> Redis -> Gin -> 路由注册 -> 启动后端服务。
+// 启动顺序：配置 -> 日志 -> 信号 ctx -> 数据库 -> Redis -> RabbitMQ -> Gin -> 路由注册 -> 启动后端服务。
 func run() error {
 	// 获取配置文件路径
 	configPath := flag.String("config", defaultConfigPath, "配置文件路径")
@@ -74,10 +75,27 @@ func run() error {
 	}()
 	zap.L().Info("Redis 连接成功")
 
+	// 初始化RabbitMQ连接（可选基础设施，连接失败时降级运行）
+	var rabbitMQ *mq.RabbitMQ
+	if cfg.RabbitMQ.URL != "" {
+		rabbitMQ, err = mq.NewRabbitMQ(cfg.RabbitMQ)
+		if err != nil {
+			zap.L().Error("初始化 RabbitMQ 失败，将降级运行", zap.Error(err))
+			rabbitMQ = nil
+		} else {
+			defer func() {
+				if err := rabbitMQ.Close(); err != nil {
+					zap.L().Warn("关闭 RabbitMQ 连接失败", zap.Error(err))
+				}
+			}()
+			zap.L().Info("RabbitMQ 连接成功")
+		}
+	}
+
 	// 初始化gin引擎
 	g := httpgin.Init(cfg.Mode)
 
-	if err := router.Register(g, cfg, db, rdb); err != nil {
+	if err := router.Register(g, cfg, db, rdb, rabbitMQ); err != nil {
 		return fmt.Errorf("注册路由失败: %w", err)
 	}
 	zap.L().Info("路由注册成功")

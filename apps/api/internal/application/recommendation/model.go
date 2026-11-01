@@ -10,6 +10,8 @@ var (
 	ErrLoadRecommendationFailed         = errors.New("failed to load recommendations")
 	ErrLoadExposureDecisionsFailed      = errors.New("failed to load exposure decisions")
 	ErrSaveRecommendationExposureFailed = errors.New("failed to save recommendation exposure")
+	ErrUpdateUserProfileFailed          = errors.New("failed to update user interest profile")
+	ErrMarshalInterestVectorFailed      = errors.New("failed to marshal interest vector")
 )
 
 type Service struct {
@@ -51,4 +53,20 @@ type cursorPayload struct {
 	RankScore   float64 `json:"rank_score"`
 	PublishedAt string  `json:"published_at"`
 	VideoID     int64   `json:"video_id"`
+}
+
+// RefreshProfileInput 定义观看事件驱动的用户推荐画像刷新入参。
+type RefreshProfileInput struct {
+	UserID      int64
+	VideoID     int64
+	EventType   string
+	WatchMs     int
+	Completed   bool
+	ViewEventID int64
+}
+
+// RefreshProfileResult 定义用户推荐画像刷新结果。
+type RefreshProfileResult struct {
+	Profile *domainrecommendation.UserInterestProfile
+	Updated bool
 }

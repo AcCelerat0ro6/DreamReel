@@ -2,6 +2,7 @@ package domainrecommendation
 
 import (
 	"context"
+	"time"
 )
 
 type Repository interface {
@@ -11,4 +12,8 @@ type Repository interface {
 	LoadVideoVectors(ctx context.Context, videoIDs []int64) (map[int64][]float64, error)
 	// LoadUserInterestVector 加载用户兴趣向量
 	LoadUserInterestVector(ctx context.Context, userID int64) ([]float64, bool, error)
+	// ListRecentBehaviorSamples 列出用户近期的观看视频行为样本
+	ListRecentBehaviorSamples(ctx context.Context, userID int64, model string, since time.Time, limit int) ([]*BehaviorSample, error)
+	// SaveUserInterestProfile 保存用户兴趣向量
+	SaveUserInterestProfile(ctx context.Context, profile *UserInterestProfile) error
 }

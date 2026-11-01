@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // userIDFromContext 从 JWT 中间件写入的上下文中读取当前登录用户 ID。
@@ -46,6 +47,11 @@ func writeInteractionError(c *gin.Context, err error) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "comment permission denied"})
 		return
 	}
+	// 返回 500 前记录错误日志，保留 root cause 便于排障。
+	zap.L().Error("interaction request failed",
+		zap.String("path", c.Request.URL.Path),
+		zap.String("method", c.Request.Method),
+		zap.Error(err))
 	c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 }
 
@@ -68,5 +74,55 @@ func actionResponseFromResult(result *applicationinteraction.ActionResult) actio
 		Active:        result.Active,
 		LikeCount:     result.LikeCount,
 		FavoriteCount: result.FavoriteCount,
+	}
+}
+
+func commentResponseFromResult(result *applicationinteraction.CreateCommentResult) commentResponse {
+	response := commentResponse{
+		ID:            result.Comment.ID,
+		VideoID:       result.Comment.VideoID,
+		UserID:        result.Comment.UserID,
+		UserNickname:  result.Comment.UserNickname,
+		UserAvatarURL: result.Comment.UserAvatarURL,
+		Content:       result.Comment.Content,
+		CreatedAt:     result.Comment.CreatedAt,
+	}
+	response.CommentCount = result.CommentCount
+	return response
+}
+
+func parseLimit(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit <= 0 {
+		return 0, domaininteraction.ErrInvalidLimit
+	}
+	return limit, nil
+}
+
+func commentListResponseFromResult(result *applicationinteraction.CommentListResult) commentListResponse {
+	items := make([]commentResponse, 0, len(result.Items))
+	for _, item := range result.Items {
+		items = append(items, commentResponseFromDomain(item))
+	}
+	return commentListResponse{
+		Items:      items,
+		NextCursor: result.NextCursor,
+		HasMore:    result.HasMore,
+	}
+}
+
+func commentResponseFromDomain(comment *domaininteraction.Comment) commentResponse {
+	return commentResponse{
+		ID:            comment.ID,
+		VideoID:       comment.VideoID,
+		UserID:        comment.UserID,
+		UserNickname:  comment.UserNickname,
+		UserAvatarURL: comment.UserAvatarURL,
+		Content:       comment.Content,
+		CreatedAt:     comment.CreatedAt,
 	}
 }

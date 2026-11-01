@@ -5,7 +5,13 @@ import (
 	domainrecommendation "DreamReel/internal/domain/recommendation"
 	domainvideo "DreamReel/internal/domain/video"
 	"context"
+	"database/sql"
+	"errors"
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func (r *Repository) ListCandidatePool(ctx context.Context, userID int64, limit int) ([]*domainrecommendation.Candidate, error) {
@@ -76,56 +82,141 @@ func (r *Repository) LoadVideoVectors(ctx context.Context, videoIDs []int64) (ma
 	return vectors, nil
 }
 
+// LoadUserInterestVector 优先读取有效窗口内的推荐画像表向量，缺失或过期时回退为近期观看行为在线聚合。
 func (r *Repository) LoadUserInterestVector(ctx context.Context, userID int64) ([]float64, bool, error) {
-	// 从数据库中查询指定用户最近30天内的观看视频记录和观看视频的向量， 至多200条.
-	rows, err := r.db.WithContext(ctx).
-		Table("video_view_events AS ev").
-		Select("ve.embedding_json, ev.event_type, ev.watch_ms, ev.completed").
-		Joins("JOIN video_embedding AS ve ON ve.video_id = ev.video_id AND ve.model = ?", domainembedding.HashNgramModel).
-		Where("ev.user_id = ? AND ev.created_at >= ? AND ev.event_type IN ?", userID, time.Now().Add(-positiveEventWindow), positiveEventTypes()).
-		Order("ev.created_at DESC").
-		Limit(200).
-		Rows()
+	if userID <= 0 {
+		return nil, false, nil
+	}
 
+	since := time.Now().Add(-domainrecommendation.PositiveBehaviorWindow)
+	var profile UserInterestProfileModel
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND model = ? AND updated_at >= ?", userID, domainembedding.HashNgramModel, since).
+		Take(&profile).
+		Error
+	if err == nil {
+		vector, decodeErr := decodeVector(profile.EmbeddingJSON)
+		if decodeErr == nil && len(vector) == domainembedding.HashNgramDimension && domainrecommendation.IsValidInterestVector(vector) {
+			return vector, true, nil
+		}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, err
+	}
+
+	samples, err := r.ListRecentBehaviorSamples(
+		ctx,
+		userID,
+		domainembedding.HashNgramModel,
+		since,
+		domainrecommendation.MaxProfileSampleEvents,
+	)
 	if err != nil {
 		return nil, false, err
 	}
+	vector, sampleCount := domainrecommendation.AggregateInterestVector(samples)
+	if !domainrecommendation.IsValidInterestVector(vector) || sampleCount == 0 {
+		return nil, false, nil
+	}
+	return vector, true, nil
+}
+
+// ListRecentBehaviorSamples 读取用户近期对已发布视频的正反馈观看行为，并在视频向量尚未落表时按标题描述兜底计算。
+func (r *Repository) ListRecentBehaviorSamples(ctx context.Context, userID int64, model string, since time.Time, limit int) ([]*domainrecommendation.BehaviorSample, error) {
+	if userID <= 0 || limit <= 0 {
+		return []*domainrecommendation.BehaviorSample{}, nil
+	}
+	if model == "" {
+		model = domainembedding.HashNgramModel
+	}
+	rows, err := r.db.WithContext(ctx).
+		Table("video_view_events AS ev").
+		Select("ve.embedding_json, v.title, v.description, ev.event_type, ev.watch_ms, ev.completed").
+		Joins("JOIN video AS v ON v.id = ev.video_id AND v.status = ?", domainvideo.StatusPublished).
+		Joins("LEFT JOIN video_embedding AS ve ON ve.video_id = ev.video_id AND ve.model = ?", model).
+		Where(
+			"ev.user_id = ? AND ev.created_at >= ? AND (ev.event_type IN ? OR (ev.completed = ? AND ev.event_type <> ?))",
+			userID,
+			since,
+			domainrecommendation.PositiveBehaviorEventTypes(),
+			true,
+			domainrecommendation.BehaviorEventExposed,
+		).
+		Order("ev.created_at DESC").
+		Order("ev.id DESC").
+		Limit(limit).
+		Rows()
+
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 
-	var sum []float64
-	var totalWeight float64
+	var fallbackVectorizer *domainembedding.HashNgramVectorizer
+	samples := make([]*domainrecommendation.BehaviorSample, 0, limit)
 	for rows.Next() {
-		var embeddingJSON string
+		var embeddingJSON sql.NullString
+		var title string
+		var description string
 		var eventType string
 		var watchMs int
 		var completed bool
-		if err := rows.Scan(&embeddingJSON, &eventType, &watchMs, &completed); err != nil {
-			return nil, false, err
+		if err := rows.Scan(&embeddingJSON, &title, &description, &eventType, &watchMs, &completed); err != nil {
+			return nil, err
 		}
-		vector, err := decodeVector(embeddingJSON)
-		if err != nil || len(vector) == 0 {
+
+		var vector []float64
+		if embeddingJSON.Valid && strings.TrimSpace(embeddingJSON.String) != "" {
+			if decoded, decodeErr := decodeVector(embeddingJSON.String); decodeErr == nil {
+				vector = decoded
+			}
+		}
+		if len(vector) == 0 && model == domainembedding.HashNgramModel {
+			if fallbackVectorizer == nil {
+				fallbackVectorizer = domainembedding.NewHashNgramVectorizer()
+			}
+			vector = fallbackVectorizer.Vectorize(domainembedding.BuildVideoText(title, description))
+		}
+		if !domainrecommendation.IsValidInterestVector(vector) {
 			continue
 		}
-		if len(sum) == 0 {
-			sum = make([]float64, len(vector))
-		}
-		if len(vector) != len(sum) {
-			continue
-		}
-		weight := eventWeight(eventType, watchMs, completed)
-		for i := range vector {
-			sum[i] += vector[i] * weight
-		}
-		totalWeight += weight
+		samples = append(samples, &domainrecommendation.BehaviorSample{
+			EventType: eventType,
+			WatchMs:   watchMs,
+			Completed: completed,
+			Embedding: vector,
+		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	if len(sum) == 0 || totalWeight == 0 {
-		return nil, false, nil
+	return samples, nil
+
+}
+
+// SaveUserInterestProfile 使用 user_id + model upsert，重复或乱序行为事件覆盖最新兴趣向量且保持 last_event_id 单调递增。
+func (r *Repository) SaveUserInterestProfile(ctx context.Context, profile *domainrecommendation.UserInterestProfile) error {
+	if profile == nil {
+		return nil
 	}
-	for i := range sum {
-		sum[i] = sum[i] / totalWeight
+	model := UserInterestProfileModel{
+		UserID:        profile.UserID,
+		Model:         profile.Model,
+		Dimension:     profile.Dimension,
+		EmbeddingJSON: profile.EmbeddingJSON,
+		SampleCount:   profile.SampleCount,
+		LastEventID:   profile.LastEventID,
 	}
-	return sum, true, nil
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "user_id"},
+			{Name: "model"},
+		},
+		DoUpdates: clause.Assignments(map[string]any{
+			"dimension":      gorm.Expr("VALUES(dimension)"),
+			"embedding_json": gorm.Expr("VALUES(embedding_json)"),
+			"sample_count":   gorm.Expr("VALUES(sample_count)"),
+			"last_event_id":  gorm.Expr("GREATEST(last_event_id, VALUES(last_event_id))"),
+			"updated_at":     gorm.Expr("VALUES(updated_at)"),
+		}),
+	}).Create(&model).Error
 }

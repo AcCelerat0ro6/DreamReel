@@ -4,6 +4,7 @@ import (
 	domainembedding "DreamReel/internal/domain/embedding"
 	domainrecommendation "DreamReel/internal/domain/recommendation"
 	"context"
+	"encoding/json"
 )
 
 func (s *Service) Recommend(ctx context.Context, input CandidateRequest) (*CandidateResult, error) {
@@ -65,13 +66,13 @@ func (s *Service) rankCandidates(ctx context.Context, userID int64, pool []*doma
 	if len(pool) == 0 {
 		return []*domainrecommendation.Candidate{}, nil
 	}
+
 	videoIDs := make([]int64, 0, len(pool))
 	for _, candidate := range pool {
 		if candidate != nil && candidate.VideoID > 0 {
 			videoIDs = append(videoIDs, candidate.VideoID)
 		}
 	}
-	// 1. 加载粗召回的候选视频对应的向量
 	vectors, err := s.repo.LoadVideoVectors(ctx, videoIDs)
 	if err != nil {
 		return nil, err
@@ -80,9 +81,9 @@ func (s *Service) rankCandidates(ctx context.Context, userID int64, pool []*doma
 	if err != nil {
 		return nil, err
 	}
+
 	now := s.now()
 	ranked := make([]*domainrecommendation.Candidate, 0, len(pool))
-	// 2. 计算候选视频的 freshnessScore 和 rankScore，并计算总得分
 	for _, candidate := range pool {
 		if candidate == nil {
 			continue
@@ -102,7 +103,59 @@ func (s *Service) rankCandidates(ctx context.Context, userID int64, pool []*doma
 		value.Reason = recommendationReason(hasUserVector, value.Similarity, value.HotScore)
 		ranked = append(ranked, &value)
 	}
-	// 将候选视频按照得分排序并返回最终结果
+
 	sortCandidates(ranked)
 	return ranked, nil
+}
+
+// RefreshUserInterestProfile 根据观看行为事件聚合用户近期正反馈样本，并更新用户推荐兴趣向量。
+func (s *Service) RefreshUserInterestProfile(ctx context.Context, input RefreshProfileInput) (*RefreshProfileResult, error) {
+	if s == nil || s.repo == nil || input.UserID <= 0 {
+		return &RefreshProfileResult{}, nil
+	}
+	if !domainrecommendation.IsProfileTriggerEvent(input.EventType, input.Completed) {
+		return &RefreshProfileResult{}, nil
+	}
+
+	since := s.now().Add(-domainrecommendation.PositiveBehaviorWindow)
+	samples, err := s.repo.ListRecentBehaviorSamples(
+		ctx,
+		input.UserID,
+		domainembedding.HashNgramModel,
+		since,
+		domainrecommendation.MaxProfileSampleEvents,
+	)
+	if err != nil {
+		return nil, ErrUpdateUserProfileFailed
+	}
+
+	vector, sampleCount := domainrecommendation.AggregateInterestVector(samples)
+	if len(vector) == 0 || sampleCount == 0 {
+		return &RefreshProfileResult{}, nil
+	}
+
+	content, err := json.Marshal(vector)
+	if err != nil {
+		return nil, ErrMarshalInterestVectorFailed
+	}
+
+	profile, err := domainrecommendation.NewUserInterestProfile(
+		input.UserID,
+		domainembedding.HashNgramModel,
+		vector,
+		string(content),
+		sampleCount,
+		input.ViewEventID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.SaveUserInterestProfile(ctx, profile); err != nil {
+		return nil, ErrUpdateUserProfileFailed
+	}
+
+	return &RefreshProfileResult{
+		Profile: profile,
+		Updated: true,
+	}, nil
 }

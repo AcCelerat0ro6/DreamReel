@@ -232,12 +232,13 @@ func restoreStat(model RelationStatModel) *domainrelation.RelationStat {
 	)
 }
 
-// SetFollow 设置关注或取关状态，并在同一事务中维护双方计数。
-func (r *Repository) SetFollow(ctx context.Context, userID int64, targetUserID int64, active bool, idempotencyKey string) (*domainrelation.Follow, *domainrelation.RelationStat, *domainrelation.RelationStat, error) {
+// SetFollow 设置关注或取关状态，并在同一事务中维护双方计数及返回状态变化量。
+func (r *Repository) SetFollow(ctx context.Context, userID int64, targetUserID int64, active bool, idempotencyKey string) (*domainrelation.Follow, *domainrelation.RelationStat, *domainrelation.RelationStat, int, error) {
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	var follow FollowModel
 	var userStat RelationStatModel
 	var targetStat RelationStatModel
+	var statDelta int
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockUserPair(tx, userID, targetUserID); err != nil {
 			return err
@@ -336,6 +337,7 @@ func (r *Repository) SetFollow(ctx context.Context, userID int64, targetUserID i
 				return err
 			}
 			userStat, targetStat = actorStat, targetStatNow
+			statDelta = delta
 			return nil
 		}
 
@@ -349,7 +351,7 @@ func (r *Repository) SetFollow(ctx context.Context, userID int64, targetUserID i
 
 	if err != nil {
 		if errors.Is(err, domainrelation.ErrTargetUserNotFound) || errors.Is(err, domainrelation.ErrIdempotencyKeyConflict) {
-			return nil, nil, nil, err
+			return nil, nil, nil, 0, err
 		}
 		zap.L().Error("set follow transaction failed",
 			zap.Int64("user_id", userID),
@@ -358,10 +360,10 @@ func (r *Repository) SetFollow(ctx context.Context, userID int64, targetUserID i
 			zap.String("idempotency_key", idempotencyKey),
 			zap.Error(err),
 		)
-		return nil, nil, nil, err
+		return nil, nil, nil, 0, err
 	}
 
-	return restoreFollow(follow), restoreStat(userStat), restoreStat(targetStat), nil
+	return restoreFollow(follow), restoreStat(userStat), restoreStat(targetStat), statDelta, nil
 }
 
 // GetUserProfile 读取用户展示资料，用于关注通知。

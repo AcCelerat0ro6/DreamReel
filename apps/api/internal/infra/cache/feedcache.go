@@ -689,3 +689,13 @@ func (c *FeedCache) AddHotScore(ctx context.Context, videoID int64, scoreDelta i
 	}
 	return c.client.Expire(ctx, key, hotMinuteBucketTTL).Err()
 }
+
+// SetVideoStat 写入单个视频的计数缓存，用于评论写入后刷新 Feed 展示。
+func (c *FeedCache) SetVideoStat(ctx context.Context, stat *domaininteraction.VideoStat) error {
+	if stat == nil || stat.VideoID <= 0 {
+		return nil
+	}
+	err := c.setActionStatJSON(ctx, feedStatKey(stat.VideoID), videoStatToFeedStat(stat))
+	metrics.ObserveCacheWrite("stat", 1, err)
+	return err
+}

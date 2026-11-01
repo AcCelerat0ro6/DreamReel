@@ -64,6 +64,13 @@ type MessageWriter interface {
 	CreateFromEvent(ctx context.Context, userID int64, messageType string, title string, content string, eventID string, idempotencyKey string) (any, error)
 }
 
+// WithMessageWriter 为关注成功后的通知写入启用消息中心。
+func WithMessageWriter(writer MessageWriter) Option {
+	return func(s *Service) {
+		s.messageWriter = writer
+	}
+}
+
 // ActorMessageWriter 可在关注消息里携带触发用户资料。
 type ActorMessageWriter interface {
 	CreateFromActorEvent(ctx context.Context, userID int64, messageType string, title string, content string, eventID string, idempotencyKey string, actorID int64, actorNickname string, actorAvatarURL string) (any, error)
@@ -85,7 +92,7 @@ func (s *Service) setFollow(ctx context.Context, userID int64, targetUserID int6
 		return nil, err
 	}
 
-	follow, userStat, targetStat, err := s.repo.SetFollow(ctx, userID, targetUserID, active, idempotencyKey)
+	follow, userStat, targetStat, delta, err := s.repo.SetFollow(ctx, userID, targetUserID, active, idempotencyKey)
 	if err != nil {
 		if errors.Is(err, domainrelation.ErrTargetUserNotFound) {
 			return nil, err
@@ -110,7 +117,8 @@ func (s *Service) setFollow(ctx context.Context, userID int64, targetUserID int6
 		return nil, fmt.Errorf("%w: %v", ErrUpdateRelationFailed, err)
 	}
 
-	if active && follow.Active() {
+	// 仅在真正新增关注（delta > 0）时执行关注流回填与站内通知，避免重复关注或幂等重试产生冗余操作。
+	if active && follow.Active() && delta > 0 {
 		if err := s.backfillFollowFeed(ctx, userID, targetUserID); err != nil {
 			zap.L().Error("backfill follow feed failed",
 				zap.Int64("user_id", userID),

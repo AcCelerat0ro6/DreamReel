@@ -1,6 +1,7 @@
 package mq
 
 import (
+	applicationexposure "DreamReel/internal/application/exposure"
 	applicationinteraction "DreamReel/internal/application/interaction"
 	"DreamReel/internal/infra/config"
 	"DreamReel/internal/infra/metrics"
@@ -310,4 +311,66 @@ func normalizeRabbitMQConfig(cfg config.RabbitMQConfig) config.RabbitMQConfig {
 		cfg.ViewEventRecordedRouting = defaultViewEventRecordedRouting
 	}
 	return cfg
+}
+
+// PublishViewEventRecorded 发布视频观看事件记录。
+func (r *RabbitMQ) PublishViewEventRecorded(ctx context.Context, event *applicationexposure.ViewEventRecordedEvent) error {
+	if event == nil {
+		return nil
+	}
+	content, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	return r.publishChannel.PublishWithContext(
+		ctx,
+		r.config.ExposureExchange,
+		r.config.ViewEventRecordedRouting,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			Body:         content,
+			DeliveryMode: amqp.Persistent,
+			MessageId:    event.EventID,
+			Timestamp:    time.Now(),
+		},
+	)
+}
+
+func (r *RabbitMQ) ConsumeViewEventRecorded(ctx context.Context, handler func(context.Context, *applicationexposure.ViewEventRecordedEvent) error) error {
+	deliveries, err := r.consumerChannel.ConsumeWithContext(
+		ctx,
+		r.config.ViewEventRecordedQueue,
+		"",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for delivery := range deliveries {
+			start := time.Now()
+			var event applicationexposure.ViewEventRecordedEvent
+			if err := json.Unmarshal(delivery.Body, &event); err != nil {
+				metrics.ObserveWorkerJob("mq_view_event_decode", time.Since(start), err)
+				_ = delivery.Nack(false, false)
+				continue
+			}
+			if err := handler(ctx, &event); err != nil {
+				metrics.ObserveWorkerJob("mq_view_event_consume", time.Since(start), err)
+				_ = delivery.Nack(false, true)
+				continue
+			}
+			metrics.ObserveWorkerJob("mq_view_event_consume", time.Since(start), nil)
+			_ = delivery.Ack(false)
+		}
+	}()
+	return nil
 }

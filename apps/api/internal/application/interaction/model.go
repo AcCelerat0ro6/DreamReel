@@ -51,6 +51,28 @@ type ActionStateResult struct {
 	IdempotencyKey string
 }
 
+type CreateCommentResult struct {
+	Comment      *domaininteraction.Comment
+	CommentCount int
+}
+
+type CommentListResult struct {
+	Items      []*domaininteraction.Comment
+	NextCursor string
+	HasMore    bool
+}
+
+type commentCursorPayload struct {
+	CreatedAt string `json:"created_at"`
+	CommentID int64  `json:"comment_id"`
+}
+
+type DeleteCommentResult struct {
+	CommentID    int64
+	Status       int
+	CommentCount int
+}
+
 // StatCache 同步 Feed 展示所需的视频互动计数缓存。
 type StatCache interface {
 	SetVideoStat(ctx context.Context, stat *domaininteraction.VideoStat) error
@@ -64,6 +86,13 @@ type HotScoreRecorder interface {
 // MessageWriter 写入互动触发的站内消息。
 type MessageWriter interface {
 	CreateFromEvent(ctx context.Context, userID int64, messageType string, title string, content string, eventID string, idempotencyKey string) (any, error)
+}
+
+// WithMessageWriter 为点赞和评论成功后的通知写入启用消息中心。
+func WithMessageWriter(writer MessageWriter) Option {
+	return func(s *Service) {
+		s.messageWriter = writer
+	}
 }
 
 // ActorMessageWriter 可在消息里携带触发互动的用户资料。

@@ -4,8 +4,10 @@ import (
 	domaininteraction "DreamReel/internal/domain/interaction"
 	domainvideo "DreamReel/internal/domain/video"
 	infravideo "DreamReel/internal/infra/persistence/video"
+	"errors"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -45,10 +47,56 @@ func idempotencyKeyPtr(value string) *string {
 	return &value
 }
 
-// clampCount 防止并发或脏数据导致计数变成负数。
+// commentWithUserSelect 统一评论查询字段，并附带用户昵称和头像。
+func commentWithUserSelect() string {
+	return "c.id, c.video_id, c.user_id, a.nickname AS user_nickname, a.avatar_url AS user_avatar_url, c.content, c.status, c.idempotency_key, c.created_at, c.updated_at"
+}
+
+// restoreComment 把评论联表查询结果转换为领域对象。
+func restoreComment(model commentWithUserModel) *domaininteraction.Comment {
+	return domaininteraction.RestoreComment(
+		model.ID,
+		model.VideoID,
+		model.UserID,
+		model.UserNickname,
+		model.UserAvatarURL,
+		model.Content,
+		model.Status,
+		idempotencyKeyValue(model.IdempotencyKey),
+		model.CreatedAt,
+		model.UpdatedAt,
+	)
+}
+
+// isDuplicateKeyError 兼容 GORM 标准错误和 MySQL 1062 唯一键冲突。
+func isDuplicateKeyError(err error) bool {
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
+}
+
 func clampCount(value int) int {
 	if value < 0 {
 		return 0
 	}
 	return value
+}
+
+func currentVideoStatCounter(tx *gorm.DB, videoID int64, field string) (int, error) {
+	var stat infravideo.VideoStatModel
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("video_id = ?", videoID).Take(&stat).Error; err != nil {
+		return 0, mapVideoError(err)
+	}
+	switch field {
+	case "like_count":
+		return stat.LikeCount, nil
+	case "favorite_count":
+		return stat.FavoriteCount, nil
+	case "comment_count":
+		return stat.CommentCount, nil
+	default:
+		return 0, nil
+	}
 }

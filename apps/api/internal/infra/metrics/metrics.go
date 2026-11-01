@@ -128,6 +128,25 @@ var (
 		},
 		[]string{"job", "result"},
 	)
+
+	MQPublishTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "mq_publish_total",
+			Help:      "Total MQ messages published by event and result.",
+		},
+		[]string{"event", "result"},
+	)
+
+	MQPublishDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Name:      "mq_publish_duration_seconds",
+			Help:      "MQ message publish duration in seconds by event.",
+			Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
+		},
+		[]string{"event", "result"},
+	)
 )
 
 func init() {
@@ -144,6 +163,8 @@ func init() {
 		VideoProcessingDuration,
 		WorkerJobsTotal,
 		WorkerJobDuration,
+		MQPublishTotal,
+		MQPublishDuration,
 	)
 }
 
@@ -244,6 +265,14 @@ func ObserveWorkerJob(job string, duration time.Duration, err error) {
 	result := resultLabel(err)
 	WorkerJobsTotal.WithLabelValues(job, result).Inc()
 	WorkerJobDuration.WithLabelValues(job, result).Observe(duration.Seconds())
+}
+
+// ObserveMQPublish 记录 MQ 消息投递次数与耗时。
+func ObserveMQPublish(event string, duration time.Duration, err error) {
+	event = normalizeLabel(event, "unknown")
+	result := resultLabel(err)
+	MQPublishTotal.WithLabelValues(event, result).Inc()
+	MQPublishDuration.WithLabelValues(event, result).Observe(duration.Seconds())
 }
 
 func resultLabel(err error) string {

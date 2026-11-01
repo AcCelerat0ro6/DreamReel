@@ -2,6 +2,7 @@ package main
 
 import (
 	applicationinteraction "DreamReel/internal/application/interaction"
+	applicationrecommendation "DreamReel/internal/application/recommendation"
 	"DreamReel/internal/infra/config"
 	"DreamReel/internal/infra/database"
 	applog "DreamReel/internal/infra/log"
@@ -9,9 +10,11 @@ import (
 	mq "DreamReel/internal/infra/mq"
 	infrainteraction "DreamReel/internal/infra/persistence/interaction"
 	"DreamReel/internal/infra/persistence/migration"
+	infrarecommendation "DreamReel/internal/infra/persistence/recommendation"
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -24,7 +27,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const configPath = "./configs/config.yaml"
+const defaultConfigPath = "G:\\GoCode\\DreamReel\\apps\\api\\configs\\config.yaml"
 
 func main() {
 	if err := run(); err != nil {
@@ -35,7 +38,11 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.LoadConfig(configPath)
+	// 获取配置文件路径
+	configPath := flag.String("config", defaultConfigPath, "配置文件路径")
+	flag.Parse()
+
+	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		// 日志初始化前 zap.L() 仍是空实现，用标准库 log 写 stderr 保证早期启动错误可见
 		log.Printf("load config failed: %v", err)
@@ -49,9 +56,6 @@ func run() error {
 
 	if cfg.RabbitMQ.URL == "" {
 		return errors.New("rabbitmq url is required for worker")
-	}
-	if cfg.Redis.Addr == "" {
-		return errors.New("redis addr is required for worker")
 	}
 
 	sqlDB, err := database.New(&cfg.Database)
@@ -95,6 +99,13 @@ func startWorkers(ctx context.Context, cfg *config.Config, gormDB *gorm.DB, rabb
 	interactionRepo := infrainteraction.New(gormDB)
 	actionWorker := applicationinteraction.NewActionWorker(interactionRepo, rabbitMQ)
 	if err := actionWorker.Start(ctx); err != nil {
+		return err
+	}
+
+	recommendationRepo := infrarecommendation.New(gormDB)
+	recommendationService := applicationrecommendation.New(recommendationRepo)
+	profileWorker := applicationrecommendation.NewProfileWorker(recommendationService, rabbitMQ)
+	if err := profileWorker.Start(ctx); err != nil {
 		return err
 	}
 	return nil

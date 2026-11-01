@@ -241,3 +241,243 @@ func updateActionStat(tx *gorm.DB, videoID int64, actionType string, delta int) 
 	}
 	return toDomainVideoStat(videoID, stat), nil
 }
+
+// FindCommentByUserAndIdempotencyKey 根据用户和幂等键查找已创建评论。
+func (r *Repository) FindCommentByUserAndIdempotencyKey(ctx context.Context, userID int64, idempotencyKey string) (*domaininteraction.Comment, int, error) {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" {
+		return nil, 0, domaininteraction.ErrCommentNotFound
+	}
+
+	var model commentWithUserModel
+	result := r.db.WithContext(ctx).
+		Table("interaction_comment AS c").
+		Select(commentWithUserSelect()).
+		Joins("LEFT JOIN account AS a ON a.id = c.user_id").
+		Where("c.user_id = ? AND c.idempotency_key = ?", userID, idempotencyKey).
+		Limit(1).
+		Find(&model)
+	if result.Error != nil {
+		return nil, 0, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, 0, domaininteraction.ErrCommentNotFound
+	}
+	count, err := r.commentCount(ctx, model.VideoID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return restoreComment(model), count, nil
+}
+
+// commentCount 读取视频当前评论数，用于幂等评论创建返回一致响应。
+func (r *Repository) commentCount(ctx context.Context, videoID int64) (int, error) {
+	var stat infravideo.VideoStatModel
+	err := r.db.WithContext(ctx).Where("video_id = ?", videoID).Take(&stat).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, domaininteraction.ErrVideoNotFound
+		}
+		return 0, err
+	}
+	return stat.CommentCount, nil
+}
+
+// CreateComment 创建评论，并在同一事务内增加视频评论数。
+func (r *Repository) CreateComment(ctx context.Context, comment *domaininteraction.Comment) (*domaininteraction.Comment, int, int, error) {
+	var model CommentModel
+	var count int
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockPublishedVideo(tx, comment.VideoID); err != nil {
+			return err
+		}
+		model = CommentModel{
+			VideoID:        comment.VideoID,
+			UserID:         comment.UserID,
+			Content:        comment.Content,
+			Status:         comment.Status,
+			IdempotencyKey: idempotencyKeyPtr(comment.IdempotencyKey),
+		}
+
+		if err := tx.Create(&model).Error; err != nil {
+			// 唯一键冲突通常表示同一幂等键已创建过评论，交给外层加载已有结果。
+			if isDuplicateKeyError(err) && comment.IdempotencyKey != "" {
+				return domaininteraction.ErrCommentNotFound
+			}
+			return err
+		}
+
+		nextCount, err := updateVideoStatCounter(tx, model.VideoID, "comment_count", 1)
+		if err != nil {
+			return err
+		}
+		count = nextCount
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, domaininteraction.ErrCommentNotFound) && comment.IdempotencyKey != "" {
+			// 如果由于幂等键冲突导致创建失败，尝试加载已存在的评论。
+			existing, existingCount, loadErr := r.FindCommentByUserAndIdempotencyKey(ctx, comment.UserID, comment.IdempotencyKey)
+			if loadErr == nil {
+				return existing, existingCount, 0, nil
+			}
+		}
+		return nil, 0, 0, mapVideoError(err)
+	}
+
+	created, err := r.FindCommentByID(ctx, model.ID)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return created, count, 1, nil
+}
+
+// updateVideoStatCounter 为 video_stat 加锁后更新计数，避免并发写丢失。
+func updateVideoStatCounter(tx *gorm.DB, videoID int64, field string, delta int) (int, error) {
+	var stat infravideo.VideoStatModel
+	// 加写锁
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("video_id = ?", videoID).Take(&stat).Error; err != nil {
+		return 0, mapVideoError(err)
+	}
+
+	switch field {
+	case "like_count":
+		stat.LikeCount = clampCount(stat.LikeCount + delta)
+	case "favorite_count":
+		stat.FavoriteCount = clampCount(stat.FavoriteCount + delta)
+	case "comment_count":
+		stat.CommentCount = clampCount(stat.CommentCount + delta)
+	default:
+		return 0, domaininteraction.ErrInvalidActionType
+	}
+
+	if err := tx.Save(&stat).Error; err != nil {
+		return 0, err
+	}
+
+	switch field {
+	case "like_count":
+		return stat.LikeCount, nil
+	case "favorite_count":
+		return stat.FavoriteCount, nil
+	case "comment_count":
+		return stat.CommentCount, nil
+	default:
+		return 0, nil
+	}
+}
+
+// FindCommentByID 查询评论详情，同时补齐评论用户昵称和头像。
+func (r *Repository) FindCommentByID(ctx context.Context, commentID int64) (*domaininteraction.Comment, error) {
+	var model commentWithUserModel
+	err := r.db.WithContext(ctx).
+		Table("interaction_comment AS c").
+		Select(commentWithUserSelect()).
+		Joins("LEFT JOIN account AS a ON a.id = c.user_id").
+		Where("c.id = ?", commentID).
+		Take(&model).
+		Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domaininteraction.ErrCommentNotFound
+		}
+		return nil, err
+	}
+	return restoreComment(model), nil
+}
+
+// ListComments 按 created_at 和 id 倒序查询视频评论
+func (r *Repository) ListComments(ctx context.Context, videoID int64, cursor *domaininteraction.CommentCursor, limit int) ([]*domaininteraction.Comment, error) {
+	var models []commentWithUserModel
+	query := r.db.WithContext(ctx).
+		Table("interaction_comment AS c").
+		Select(commentWithUserSelect()).
+		Joins("LEFT JOIN account AS a ON a.id = c.user_id").
+		Where("c.video_id = ? AND c.status = ?", videoID, domaininteraction.CommentStatusNormal)
+
+	if cursor != nil {
+		// 游标条件和排序字段一致，保证翻页时没有重复项。
+		query = query.Where(
+			"(c.created_at < ? OR (c.created_at = ? AND c.id < ?))",
+			cursor.CreatedAt,
+			cursor.CreatedAt,
+			cursor.CommentID,
+		)
+	}
+
+	if err := query.Order("c.created_at DESC").Order("c.id DESC").Limit(limit).Scan(&models).Error; err != nil {
+		return nil, err
+	}
+
+	comments := make([]*domaininteraction.Comment, 0, len(models))
+	for _, model := range models {
+		comments = append(comments, restoreComment(model))
+	}
+	return comments, nil
+}
+
+// DeleteComment 软删除评论，并返回删除后的评论状态和视频评论数。
+func (r *Repository) DeleteComment(ctx context.Context, commentID int64, userID int64, role string) (*domaininteraction.Comment, int, int, error) {
+	role = strings.TrimSpace(role)
+	var model CommentModel
+	var count int
+	var statDelta int
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 锁定评论行，避免重复删除时并发扣减 comment_count。
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", commentID).
+			Take(&model).
+			Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return domaininteraction.ErrCommentNotFound
+			}
+			return err
+		}
+
+		var video infravideo.VideoModel
+		// 读取视频作者用于权限判断：评论作者、视频作者、管理员都可删除。
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", model.VideoID).
+			Take(&video).
+			Error; err != nil {
+			return mapVideoError(err)
+		}
+
+		if model.UserID != userID && video.AuthorID != userID && role != domainaccount.RoleAdmin {
+			return domaininteraction.ErrCommentPermissionDenied
+		}
+
+		// 已删除评论直接返回当前计数，保持 DELETE 幂等。
+		if model.Status == domaininteraction.CommentStatusDeleted {
+			currentCount, err := currentVideoStatCounter(tx, model.VideoID, "comment_count")
+			if err != nil {
+				return err
+			}
+			count = currentCount
+			return nil
+		}
+
+		model.Status = domaininteraction.CommentStatusDeleted
+		if err := tx.Save(&model).Error; err != nil {
+			return err
+		}
+
+		nextCount, err := updateVideoStatCounter(tx, model.VideoID, "comment_count", -1)
+		if err != nil {
+			return err
+		}
+		count = nextCount
+		statDelta = -1
+		return nil
+	})
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	comment, err := r.FindCommentByID(ctx, model.ID)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	return comment, count, statDelta, nil
+}

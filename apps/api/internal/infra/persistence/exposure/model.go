@@ -1,4 +1,4 @@
-package exposure
+package infraexposure
 
 import "time"
 

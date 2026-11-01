@@ -175,3 +175,15 @@ func interactionStatField(actionType string) string {
 func hotRankMember(videoID int64) string {
 	return fmt.Sprintf("%020d", videoID)
 }
+
+func videoStatToFeedStat(stat *domaininteraction.VideoStat) *domainfeed.FeedStat {
+	if stat == nil {
+		return nil
+	}
+	return &domainfeed.FeedStat{
+		VideoID:       stat.VideoID,
+		LikeCount:     stat.LikeCount,
+		CommentCount:  stat.CommentCount,
+		FavoriteCount: stat.FavoriteCount,
+	}
+}

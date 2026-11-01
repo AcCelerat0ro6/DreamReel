@@ -38,6 +38,14 @@ type Repository interface {
 	GetUserProfile(ctx context.Context, userID int64) (*UserProfile, error)
 	// SetAction 设置点赞或收藏状态，并返回更新后的完整视频统计快照。
 	SetAction(ctx context.Context, userID int64, videoID int64, actionType string, active bool, idempotencyKey string) (*Action, *VideoStat, int, error)
+	// FindCommentByUserAndIdempotencyKey 用于评论创建接口的幂等重放。
+	FindCommentByUserAndIdempotencyKey(ctx context.Context, userID int64, idempotencyKey string) (*Comment, int, error)
+	// CreateComment 创建评论并返回视频最新评论数。
+	CreateComment(ctx context.Context, comment *Comment) (*Comment, int, int, error)
+	// ListComments 按创建时间倒序读取评论列表。
+	ListComments(ctx context.Context, videoID int64, cursor *CommentCursor, limit int) ([]*Comment, error)
+	// DeleteComment 软删除评论，并根据操作者身份判断权限。
+	DeleteComment(ctx context.Context, commentID int64, userID int64, role string) (*Comment, int, int, error)
 }
 
 // Action 表示用户对视频的一类互动状态，例如点赞或收藏。
@@ -57,6 +65,26 @@ type UserProfile struct {
 	ID        int64
 	Nickname  string
 	AvatarURL string
+}
+
+// Comment 表示视频评论，包含评论者展示信息和软删除状态。
+type Comment struct {
+	ID             int64
+	VideoID        int64
+	UserID         int64
+	UserNickname   string
+	UserAvatarURL  string
+	Content        string
+	Status         int
+	IdempotencyKey string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// CommentCursor 保存评论列表分页的排序字段。
+type CommentCursor struct {
+	CreatedAt time.Time
+	CommentID int64
 }
 
 // RestoreAction 从数据库记录恢复互动行为，供仓储层返回领域对象。

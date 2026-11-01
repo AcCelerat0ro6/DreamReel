@@ -1,11 +1,114 @@
 package domainembedding
 
-import "math"
+import (
+	"hash/fnv"
+	"math"
+	"strings"
+	"unicode"
+)
 
 const (
 	HashNgramModel     = "hash-ngram-v1"
 	HashNgramDimension = 128
 )
+
+// HashNgramVectorizer 是零依赖的本地伪 embedding，适合先跑通推荐链路。
+type HashNgramVectorizer struct {
+	dimension int
+}
+
+// NewHashNgramVectorizer 创建默认 128 维 hash n-gram 向量器。
+func NewHashNgramVectorizer() *HashNgramVectorizer {
+	return &HashNgramVectorizer{dimension: HashNgramDimension}
+}
+
+func (v *HashNgramVectorizer) Dimension() int {
+	if v == nil || v.dimension <= 0 {
+		return HashNgramDimension
+	}
+	return v.dimension
+}
+
+func normalizeText(text string) string {
+	text = strings.ToLower(strings.TrimSpace(text))
+	if text == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	previousSpace := true
+	for _, r := range text {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			builder.WriteRune(r)
+			previousSpace = false
+			continue
+		}
+		if unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r) {
+			if !previousSpace {
+				builder.WriteRune(' ')
+				previousSpace = true
+			}
+		}
+	}
+	return strings.TrimSpace(builder.String())
+}
+
+func addFeature(vector []float64, feature string, weight float64) {
+	if len(vector) == 0 || feature == "" {
+		return
+	}
+	hasher := fnv.New64a()
+	_, _ = hasher.Write([]byte(feature))
+	hash := hasher.Sum64()
+	index := int(hash % uint64(len(vector)))
+	sign := 1.0
+	if (hash>>63)&1 == 1 {
+		sign = -1.0
+	}
+	vector[index] += sign * weight
+}
+
+// Vectorize 使用字符 n-gram 和 token 特征生成稳定向量，并做 L2 归一化。
+func (v *HashNgramVectorizer) Vectorize(text string) []float64 {
+	dimension := v.Dimension()
+	vector := make([]float64, dimension)
+	normalized := normalizeText(text)
+	if normalized == "" {
+		return vector
+	}
+
+	tokens := strings.Fields(normalized)
+	for _, token := range tokens {
+		addFeature(vector, "tok:"+token, 1.0)
+	}
+
+	runes := []rune(strings.ReplaceAll(normalized, " ", ""))
+	for n := 2; n <= 3; n++ {
+		if len(runes) < n {
+			continue
+		}
+		for i := 0; i+n <= len(runes); i++ {
+			addFeature(vector, string(runes[i:i+n]), 1.0)
+		}
+	}
+
+	normalizeVector(vector)
+	return vector
+}
+
+func normalizeVector(vector []float64) {
+	var sum float64
+	for _, value := range vector {
+		sum += value * value
+	}
+	if sum == 0 {
+		return
+	}
+	norm := math.Sqrt(sum)
+	for i := range vector {
+		vector[i] = vector[i] / norm
+	}
+}
 
 // CosineSimilarity 计算两个已归一化或未归一化向量的余弦相似度。
 func CosineSimilarity(left []float64, right []float64) (float64, error) {
@@ -24,4 +127,17 @@ func CosineSimilarity(left []float64, right []float64) (float64, error) {
 		return 0, nil
 	}
 	return dot / (math.Sqrt(leftNorm) * math.Sqrt(rightNorm)), nil
+}
+
+// BuildVideoText 把视频标题和简介拼成稳定向量输入。
+func BuildVideoText(title string, description string) string {
+	title = strings.TrimSpace(title)
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return title
+	}
+	if title == "" {
+		return description
+	}
+	return title + "\n" + description
 }

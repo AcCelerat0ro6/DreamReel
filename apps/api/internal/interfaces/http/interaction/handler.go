@@ -3,6 +3,7 @@ package interfacehttpinteraction
 import (
 	applicationinteraction "DreamReel/internal/application/interaction"
 	domaininteraction "DreamReel/internal/domain/interaction"
+	"DreamReel/internal/interfaces/http/middleware"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -83,4 +84,86 @@ func (h *Handler) setFavorite(c *gin.Context, active bool) {
 		return
 	}
 	c.JSON(http.StatusOK, actionResponseFromResult(result))
+}
+
+// CreateComment 创建视频评论
+// 参数来源： videoId来自路径， 评论内容来自请求体
+func (h *Handler) CreateComment(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid access token"})
+		return
+	}
+	videoID, err := parsePositiveInt64(c.Param("videoId"), domaininteraction.ErrInvalidVideoID)
+	if err != nil {
+		writeInteractionError(c, err)
+		return
+	}
+
+	var req createCommentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	result, err := h.service.CreateComment(c.Request.Context(), userID, videoID, req.Content, c.GetHeader("Idempotency-Key"))
+	if err != nil {
+		writeInteractionError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, commentResponseFromResult(result))
+}
+
+// ListComments 列出视频评论
+func (h *Handler) ListComments(c *gin.Context) {
+	videoID, err := parsePositiveInt64(c.Param("videoId"), domaininteraction.ErrInvalidVideoID)
+	if err != nil {
+		writeInteractionError(c, err)
+		return
+	}
+	limit, err := parseLimit(c.Query("limit"))
+	if err != nil {
+		writeInteractionError(c, err)
+		return
+	}
+	result, err := h.service.ListComments(c.Request.Context(), videoID, c.Query("cursor"), limit)
+	if err != nil {
+		writeInteractionError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, commentListResponseFromResult(result))
+}
+
+func (h *Handler) DeleteComment(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid access token"})
+		return
+	}
+	role := roleFromContext(c)
+	commentID, err := parsePositiveInt64(c.Param("commentId"), domaininteraction.ErrInvalidCommentID)
+	if err != nil {
+		writeInteractionError(c, err)
+		return
+	}
+
+	result, err := h.service.DeleteComment(c.Request.Context(), commentID, userID, role)
+	if err != nil {
+		writeInteractionError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, deleteCommentResponse{
+		CommentID:    result.CommentID,
+		Status:       result.Status,
+		CommentCount: result.CommentCount,
+	})
+}
+
+func roleFromContext(c *gin.Context) string {
+	value, exists := c.Get(middleware.ContextRoleKey)
+	if !exists {
+		return ""
+	}
+	role, _ := value.(string)
+	return role
 }
