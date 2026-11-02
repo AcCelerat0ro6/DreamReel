@@ -653,6 +653,24 @@ func (c *FeedCache) SetActionState(ctx context.Context, userID int64, videoID in
 	return result, nil
 }
 
+func (c *FeedCache) AddAuthorOutboxItem(ctx context.Context, authorID int64, item *domainfeed.FeedPageItem, maxLen int64) error {
+	if authorID <= 0 || item == nil || item.VideoID <= 0 || item.PublishedAt.IsZero() {
+		return nil
+	}
+	if maxLen <= 0 {
+		maxLen = 500
+	}
+	key := followingAuthorOutboxKey(authorID)
+	score := followingIndexScore(item.PublishedAt, item.VideoID)
+	member := followingIndexMember(item.VideoID, authorID, item.PublishedAt)
+	pipe := c.client.Pipeline()
+	pipe.ZAdd(ctx, key, redis.Z{Score: score, Member: member})
+	pipe.ZRemRangeByRank(ctx, key, 0, -maxLen-1)
+	pipe.Expire(ctx, key, followingIndexKeyTTL)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
 func queueActionStatBaseInit(ctx context.Context, pipe redis.Pipeliner, counterBaseKey string, initialStat *domaininteraction.VideoStat) {
 	stat := &domaininteraction.VideoStat{}
 	if initialStat != nil {

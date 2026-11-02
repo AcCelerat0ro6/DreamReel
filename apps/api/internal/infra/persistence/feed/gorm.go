@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -22,6 +23,32 @@ type Repository struct {
 // New 创建 Feed 仓储实现。
 func New(db *gorm.DB) *Repository {
 	return &Repository{db: db}
+}
+
+// EnsureTimelineIndex 创建时间线回源查询所需的联合索引。
+func EnsureTimelineIndex(db *gorm.DB) error {
+	var count int64
+	err := db.Raw(
+		"SELECT COUNT(1) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?",
+		"video",
+		"idx_video_timeline",
+	).Scan(&count).Error
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	err = db.Exec("CREATE INDEX idx_video_timeline ON video (status, published_at DESC, id DESC)").Error
+	if err != nil {
+		var mysqlErr *mysql.MySQLError
+		// 兼容 API 与 Worker 并发启动时重复创建同名索引（MySQL 1061）
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1061 {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *Repository) basePageQuery(ctx context.Context) *gorm.DB {
@@ -280,4 +307,21 @@ func (r *Repository) CountFollowers(ctx context.Context, authorID int64) (int, e
 		return 0, err
 	}
 	return count, nil
+}
+
+func (r *Repository) ListFollowerIDs(ctx context.Context, authorID int64, cursor int64, limit int) ([]int64, error) {
+	var followerIDs []int64
+	query := r.db.WithContext(ctx).
+		Table("user_follow").
+		Select("user_id").
+		Where("target_user_id = ? AND status = ?", authorID, domainrelation.FollowStatusActive)
+	if cursor > 0 {
+		query = query.Where("user_id > ?", cursor)
+	}
+	err := query.
+		Order("user_id ASC").
+		Limit(limit).
+		Scan(&followerIDs).
+		Error
+	return followerIDs, err
 }

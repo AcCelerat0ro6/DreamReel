@@ -12,6 +12,13 @@ const (
 	HashNgramDimension = 128
 )
 
+// Vectorizer 把文本转换为固定维度向量。
+type Vectorizer interface {
+	Model() string
+	Dimension() int
+	Vectorize(text string) []float64
+}
+
 // HashNgramVectorizer 是零依赖的本地伪 embedding，适合先跑通推荐链路。
 type HashNgramVectorizer struct {
 	dimension int
@@ -140,4 +147,8 @@ func BuildVideoText(title string, description string) string {
 		return description
 	}
 	return title + "\n" + description
+}
+
+func (v *HashNgramVectorizer) Model() string {
+	return HashNgramModel
 }

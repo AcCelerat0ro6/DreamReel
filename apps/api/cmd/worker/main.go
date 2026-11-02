@@ -1,16 +1,22 @@
 package main
 
 import (
+	applicationembedding "DreamReel/internal/application/embedding"
 	applicationinteraction "DreamReel/internal/application/interaction"
 	applicationrecommendation "DreamReel/internal/application/recommendation"
+	applicationvideo "DreamReel/internal/application/video"
+	"DreamReel/internal/infra/cache"
 	"DreamReel/internal/infra/config"
 	"DreamReel/internal/infra/database"
 	applog "DreamReel/internal/infra/log"
 	"DreamReel/internal/infra/metrics"
 	mq "DreamReel/internal/infra/mq"
+	infraembedding "DreamReel/internal/infra/persistence/embedding"
+	infrafeed "DreamReel/internal/infra/persistence/feed"
 	infrainteraction "DreamReel/internal/infra/persistence/interaction"
 	"DreamReel/internal/infra/persistence/migration"
 	infrarecommendation "DreamReel/internal/infra/persistence/recommendation"
+
 	"context"
 	"database/sql"
 	"errors"
@@ -94,11 +100,25 @@ func run() error {
 }
 
 func startWorkers(ctx context.Context, cfg *config.Config, gormDB *gorm.DB, rabbitMQ *mq.RabbitMQ) error {
-	// redisClient := cache.NewRedisClient(cfg.Redis)
-	// feedCache := cache.NewFeedCache(redisClient)
+	redisClient := cache.NewRedisClient(cfg.Redis)
+	feedCache := cache.NewFeedCache(redisClient)
 	interactionRepo := infrainteraction.New(gormDB)
 	actionWorker := applicationinteraction.NewActionWorker(interactionRepo, rabbitMQ)
 	if err := actionWorker.Start(ctx); err != nil {
+		return err
+	}
+
+	feedRepo := infrafeed.New(gormDB)
+	feedPreheater := applicationvideo.NewFeedPreheater(feedRepo, feedCache)
+	fanoutWorker := applicationvideo.NewFanoutWorker(feedRepo, rabbitMQ, feedCache, feedPreheater)
+	if err := fanoutWorker.Start(ctx); err != nil {
+		return err
+	}
+
+	embeddingRepo := infraembedding.New(gormDB)
+	embeddingService := applicationembedding.New(embeddingRepo, nil)
+	embeddingWorker := applicationembedding.NewVideoEmbeddingWorker(embeddingService, rabbitMQ)
+	if err := embeddingWorker.Start(ctx); err != nil {
 		return err
 	}
 

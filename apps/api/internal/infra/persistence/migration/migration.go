@@ -26,7 +26,7 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := infravideo.EnsureStats(db); err != nil {
 		return err
 	}
-	return nil
+	return infrafeed.EnsureTimelineIndex(db)
 }
 
 func autoMigrateModels(db *gorm.DB) error {

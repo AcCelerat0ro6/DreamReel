@@ -94,15 +94,12 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 	// ============================================================
 	// 3. Video 域：视频发布、查询、软删除
 	// ============================================================
-	/*
-		后续RabbitMQ初始化:
-		videoOptions := []applicationvideo.Option{}
-		if rabbitMQ != nil {
-			videoOptions = append(videoOptions, applicationvideo.WithPublishedEventPublisher(rabbitMQ))
-		}
-	*/
+	videoOptions := []applicationvideo.Option{}
+	if rabbitMQ != nil {
+		videoOptions = append(videoOptions, applicationvideo.WithPublishedEventPublisher(rabbitMQ))
+	}
 	videoRepo := infravideo.New(gormDB)
-	videoService := applicationvideo.New(videoRepo)
+	videoService := applicationvideo.New(videoRepo, videoOptions...)
 	videoHandler := interfacehttpvideo.New(videoService)
 
 	// ============================================================

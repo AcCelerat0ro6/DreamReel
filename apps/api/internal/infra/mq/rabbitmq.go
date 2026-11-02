@@ -3,6 +3,7 @@ package mq
 import (
 	applicationexposure "DreamReel/internal/application/exposure"
 	applicationinteraction "DreamReel/internal/application/interaction"
+	applicationvideo "DreamReel/internal/application/video"
 	"DreamReel/internal/infra/config"
 	"DreamReel/internal/infra/metrics"
 	"context"
@@ -369,6 +370,74 @@ func (r *RabbitMQ) ConsumeViewEventRecorded(ctx context.Context, handler func(co
 				continue
 			}
 			metrics.ObserveWorkerJob("mq_view_event_consume", time.Since(start), nil)
+			_ = delivery.Ack(false)
+		}
+	}()
+	return nil
+}
+
+func (r *RabbitMQ) PublishVideoPublished(ctx context.Context, event *applicationvideo.PublishedEvent) error {
+	if event == nil {
+		return nil
+	}
+	content, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	return r.publishChannel.PublishWithContext(
+		ctx,
+		r.config.VideoExchange,
+		r.config.VideoPublishedRouting,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType:  "application/json",
+			DeliveryMode: amqp.Persistent,
+			MessageId:    event.EventID,
+			Timestamp:    time.Now(),
+			Body:         content,
+		},
+	)
+}
+
+// 视频发布后有两个消费者， 一是视频推拉流，二是消费视频嵌入
+func (r *RabbitMQ) ConsumeVideoPublished(ctx context.Context, handler func(context.Context, *applicationvideo.PublishedEvent) error) error {
+	return r.consumeVideoPublishedQueue(ctx, r.config.VideoPublishedQueue, handler)
+}
+
+func (r *RabbitMQ) ConsumeVideoPublishedForEmbedding(ctx context.Context, handler func(context.Context, *applicationvideo.PublishedEvent) error) error {
+	return r.consumeVideoPublishedQueue(ctx, r.config.VideoEmbeddingQueue, handler)
+}
+
+func (r *RabbitMQ) consumeVideoPublishedQueue(ctx context.Context, queue string, handler func(context.Context, *applicationvideo.PublishedEvent) error) error {
+	deliveries, err := r.consumerChannel.ConsumeWithContext(
+		ctx,
+		queue,
+		"",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	go func() {
+		for delivery := range deliveries {
+			start := time.Now()
+			var event applicationvideo.PublishedEvent
+			if err := json.Unmarshal(delivery.Body, &event); err != nil {
+				metrics.ObserveWorkerJob("mq_video_published_decode", time.Since(start), err)
+				_ = delivery.Nack(false, false)
+				continue
+			}
+			if err := handler(ctx, &event); err != nil {
+				metrics.ObserveWorkerJob("mq_video_published_consume", time.Since(start), err)
+				_ = delivery.Nack(false, true)
+				continue
+			}
+			metrics.ObserveWorkerJob("mq_video_published_consume", time.Since(start), nil)
 			_ = delivery.Ack(false)
 		}
 	}()

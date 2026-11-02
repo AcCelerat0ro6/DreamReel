@@ -14,6 +14,12 @@ type PublishedEventPublisher interface {
 	PublishVideoPublished(ctx context.Context, event *PublishedEvent) error
 }
 
+func WithPublishedEventPublisher(publisher PublishedEventPublisher) Option {
+	return func(s *Service) {
+		s.publisher = publisher
+	}
+}
+
 type PublishedEvent struct {
 	EventID     string    `json:"event_id"`
 	VideoID     int64     `json:"video_id"`
