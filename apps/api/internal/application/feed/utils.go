@@ -63,6 +63,7 @@ func parseTimelineCursor(cursor string) (*domainfeed.TimelineCursor, error) {
 }
 
 func feedPageCacheKey(scene domainfeed.Scene, cursor string, limit int) string {
+	scene = domainfeed.NormalizeScene(scene)
 	cursor = strings.TrimSpace(cursor)
 	if cursor == "" {
 		return fmt.Sprintf("feed:page:v1:%s:limit:%d:first", scene, limit)
@@ -73,9 +74,12 @@ func feedPageCacheKey(scene domainfeed.Scene, cursor string, limit int) string {
 
 func feedPageCacheTTL(cursor string, cacheKey string, firstPageTTL time.Duration, pageTTL time.Duration) time.Duration {
 	ttl := pageTTL
-	// If cursor is empty, it's the first page
+	// 若游标为空则表示首页，使用首页短缓存时间
 	if strings.TrimSpace(cursor) == "" {
 		ttl = firstPageTTL
+	}
+	if ttl <= 0 {
+		return 0
 	}
 	hasher := fnv.New32a()
 	_, _ = hasher.Write([]byte(cacheKey))

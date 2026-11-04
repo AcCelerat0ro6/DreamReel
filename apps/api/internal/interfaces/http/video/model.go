@@ -17,7 +17,7 @@ type CreateVideoRequest struct {
 	OriginVideoID *int64  `json:"origin_video_id"`
 }
 
-// videoResponse 是视频详情响应，包含视频主体字段和互动计数。
+// videoCreateResponse 是视频详情响应，包含视频主体字段和互动计数。
 type videoCreateResponse struct {
 	ID            int64      `json:"id"`
 	AuthorID      int64      `json:"author_id"`
@@ -39,7 +39,14 @@ type videoCreateResponse struct {
 	OriginVideoID *int64  `json:"origin_video_id,omitempty"`
 }
 
-// videoResponseFromDomain 把领域视频转换成 HTTP JSON 响应。
+// videoListResponse 是视频列表分页响应。
+type videoListResponse struct {
+	Items  []videoCreateResponse `json:"items"`
+	Limit  int                   `json:"limit"`
+	Offset int                   `json:"offset"`
+}
+
+// videoCreateResponseFromDomain 把领域视频转换成 HTTP JSON 响应。
 func videoCreateResponseFromDomain(video *domainvideo.Video) videoCreateResponse {
 	return videoCreateResponse{
 		ID:            video.ID,
@@ -59,5 +66,18 @@ func videoCreateResponseFromDomain(video *domainvideo.Video) videoCreateResponse
 		ModelParams:   video.ModelParams,
 		AIStyleTag:    video.AIStyleTag,
 		OriginVideoID: video.OriginVideoID,
+	}
+}
+
+// videoListResponseFromDomain 组装列表响应，并回显本次分页参数。
+func videoListResponseFromDomain(videos []*domainvideo.Video, limit, offset int) videoListResponse {
+	items := make([]videoCreateResponse, 0, len(videos))
+	for _, video := range videos {
+		items = append(items, videoCreateResponseFromDomain(video))
+	}
+	return videoListResponse{
+		Items:  items,
+		Limit:  limit,
+		Offset: offset,
 	}
 }

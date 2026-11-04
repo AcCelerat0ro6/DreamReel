@@ -39,6 +39,13 @@ func (s *Service) GetConfig(ctx context.Context, platform string, networkType st
 	if err != nil {
 		return nil, ErrLoadPlaybackFailed
 	}
+	// 具体网络类型未单独配置时，回退查找该平台下的 DEFAULT 默认网络配置
+	if config == nil && networkType != domainplayback.NetworkDefault {
+		config, err = s.repo.FindConfig(ctx, platform, domainplayback.NetworkDefault)
+		if err != nil {
+			return nil, ErrLoadPlaybackFailed
+		}
+	}
 	if config == nil {
 		config = domainplayback.DefaultConfig(platform, networkType)
 	}

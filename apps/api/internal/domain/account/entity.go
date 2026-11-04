@@ -14,7 +14,7 @@ const (
 
 // User 是账号聚合根，保存登录凭证、展示资料和权限角色。
 type User struct {
-	ID        int64 //
+	ID        int64
 	Account   string
 	Password  string
 	Nickname  string
@@ -26,6 +26,11 @@ type User struct {
 	FollowingCount int
 	FollowerCount  int
 	WorkCount      int
+}
+
+// RestoreUser 从数据库记录恢复领域对象，读取路径无需再次执行注册校验。
+func RestoreUser(id int64, account, password, nickname, avatarURL, bio string, status int, role string) *User {
+	return RestoreUserWithStats(id, account, password, nickname, avatarURL, bio, status, role, 0, 0, 0)
 }
 
 // RestoreUserWithStats 从数据库记录恢复领域对象，并带上关系统计。
@@ -96,6 +101,29 @@ func (u *User) Authenticate(password string) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
 		return ErrInvalidCredentials
 	}
+	return nil
+}
+
+// UpdateProfile 执行资料部分更新，指针为 nil 表示该字段保持原值。
+func (u *User) UpdateProfile(nickname, avatarURL, bio *string) error {
+	if nickname == nil && avatarURL == nil && bio == nil {
+		return ErrEmptyProfileUpdate
+	}
+
+	if nickname != nil {
+		value := strings.TrimSpace(*nickname)
+		if value == "" {
+			return ErrEmptyNickname
+		}
+		u.Nickname = value
+	}
+	if avatarURL != nil {
+		u.AvatarURL = strings.TrimSpace(*avatarURL)
+	}
+	if bio != nil {
+		u.Bio = strings.TrimSpace(*bio)
+	}
+
 	return nil
 }
 

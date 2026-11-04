@@ -14,4 +14,6 @@ type Repository interface {
 	UpdateStatus(ctx context.Context, video *Video) error
 	// FindByID 根据ID查询视频。
 	FindByID(ctx context.Context, id int64) (*Video, error)
+	// ListByAuthor 按发布时间倒序查询指定作者公开发布的视频列表。
+	ListByAuthor(ctx context.Context, authorID int64, limit, offset int) ([]*Video, error)
 }

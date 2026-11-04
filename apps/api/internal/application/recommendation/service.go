@@ -5,6 +5,7 @@ import (
 	domainrecommendation "DreamReel/internal/domain/recommendation"
 	"context"
 	"encoding/json"
+	"errors"
 )
 
 func (s *Service) Recommend(ctx context.Context, input CandidateRequest) (*CandidateResult, error) {
@@ -48,7 +49,7 @@ func (s *Service) Recommend(ctx context.Context, input CandidateRequest) (*Candi
 			VideoID:     ranked[len(ranked)-1].VideoID,
 		})
 	}
-	// 进行同作者打散策略,避免同一作者的视频连续出现
+	// 进行同作者打散策略，避免同一作者的视频连续出现
 	ranked = interleaveByAuthor(ranked)
 
 	return &CandidateResult{
@@ -61,7 +62,88 @@ func (s *Service) Recommend(ctx context.Context, input CandidateRequest) (*Candi
 	}, nil
 }
 
-// rankCandidates对粗粒度召回的候选进行细粒度重排
+// DecideExposures 对一批候选视频执行近期曝光窗口去重判定。
+func (s *Service) DecideExposures(ctx context.Context, input ExposureDecisionInput) (*ExposureDecisionResult, error) {
+	req, err := domainrecommendation.NewExposureDecisionRequest(input.UserID, input.Scene, input.RequestID, input.VideoIDs)
+	if err != nil {
+		return nil, err
+	}
+	if len(req.VideoIDs) == 0 {
+		return &ExposureDecisionResult{
+			UserID:    req.UserID,
+			Scene:     req.Scene,
+			RequestID: req.RequestID,
+			Decisions: []*domainrecommendation.ExposureDecision{},
+		}, nil
+	}
+
+	exposures, err := s.repo.ListRecentExposures(ctx, req.UserID, req.VideoIDs, s.now().Add(-domainrecommendation.RecentExposureWindow))
+	if err != nil {
+		return nil, ErrLoadExposureDecisionsFailed
+	}
+	exposureByVideoID := make(map[int64]*domainrecommendation.Exposure, len(exposures))
+	for _, exposure := range exposures {
+		if exposure != nil {
+			exposureByVideoID[exposure.VideoID] = exposure
+		}
+	}
+
+	decisions := make([]*domainrecommendation.ExposureDecision, 0, len(req.VideoIDs))
+	for _, videoID := range req.VideoIDs {
+		if exposure := exposureByVideoID[videoID]; exposure != nil {
+			decisions = append(decisions, domainrecommendation.RestoreExposureDecision(
+				videoID,
+				false,
+				domainrecommendation.ExposureDecisionReasonRecentlyExposed,
+				&exposure.LastExposedAt,
+			))
+			continue
+		}
+		decisions = append(decisions, domainrecommendation.RestoreExposureDecision(
+			videoID,
+			true,
+			domainrecommendation.ExposureDecisionReasonFresh,
+			nil,
+		))
+	}
+	return &ExposureDecisionResult{
+		UserID:    req.UserID,
+		Scene:     req.Scene,
+		RequestID: req.RequestID,
+		Decisions: decisions,
+	}, nil
+}
+
+// SaveExposures 批量校验、去重并保存曝光记录。
+func (s *Service) SaveExposures(ctx context.Context, inputs []ExposureInput) (*ExposureResult, error) {
+	writes := make([]*domainrecommendation.ExposureWrite, 0, len(inputs))
+	seen := map[int64]struct{}{}
+	for _, input := range inputs {
+		write, err := domainrecommendation.NewExposureWrite(input.UserID, input.VideoID, input.Scene, input.RequestID)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := seen[write.VideoID]; exists {
+			continue
+		}
+		seen[write.VideoID] = struct{}{}
+		writes = append(writes, write)
+	}
+	if len(writes) == 0 {
+		return &ExposureResult{Exposures: []*domainrecommendation.Exposure{}}, nil
+	}
+
+	exposures, err := s.repo.SaveExposures(ctx, writes)
+	if err != nil {
+		if errors.Is(err, domainrecommendation.ErrVideoNotFound) {
+			return nil, err
+		}
+		return nil, ErrSaveRecommendationExposureFailed
+	}
+	return &ExposureResult{Exposures: exposures}, nil
+}
+
+// rankCandidates 对粗粒度召回的候选进行细粒度重排。
 func (s *Service) rankCandidates(ctx context.Context, userID int64, pool []*domainrecommendation.Candidate) ([]*domainrecommendation.Candidate, error) {
 	if len(pool) == 0 {
 		return []*domainrecommendation.Candidate{}, nil

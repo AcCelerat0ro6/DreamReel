@@ -28,6 +28,7 @@ import (
 	interfaceshttpfeed "DreamReel/internal/interfaces/http/feed"
 	interfacehttpinteraction "DreamReel/internal/interfaces/http/interaction"
 	"DreamReel/internal/interfaces/http/middleware"
+	interfaceshttprecommendation "DreamReel/internal/interfaces/http/recommendation"
 	interfacehttprelation "DreamReel/internal/interfaces/http/relation"
 	interfacehttpvideo "DreamReel/internal/interfaces/http/video"
 
@@ -45,6 +46,8 @@ import (
 
 	applicationplayback "DreamReel/internal/application/playback"
 	interfacehttpplayback "DreamReel/internal/interfaces/http/playback"
+
+	interfacehttpupload "DreamReel/internal/interfaces/http/upload"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -115,10 +118,10 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 	// 5. Recommendation 域：候选召回、曝光决策、内部接口
 	//    对外暴露 recommendationService 供 Feed 域作为 Recommender。
 	// ============================================================
-
 	recommendationRepo := infrarecommendation.New(gormDB)
 	recommendationService := applicationrecommendation.New(recommendationRepo)
-	// recommendationHandler := interfaceshttprecommendation.New(recommendationService)
+	recommendationHandler := interfaceshttprecommendation.New(recommendationService)
+
 	// ============================================================
 	// 6. Feed 域：时间线、关注流、热榜、推荐流
 	//    Option 集中装配：
@@ -195,16 +198,21 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 	// ============================================================
 	// 10. Playback 域：播放配置、预加载建议、QoS 上报
 	// ============================================================
-
 	playbackRepo := infraplayback.New(gormDB)
 	playbackService := applicationplayback.New(playbackRepo)
 	playbackHandler := interfacehttpplayback.New(playbackService)
+
+	// ============================================================
+	// 11. Upload 域：文件上传（本地磁盘存储）
+	// ============================================================
+	uploadHandler := interfacehttpupload.New("./uploads")
 
 	// ============================================================
 	// 11. 中间件
 	// ============================================================
 	authMiddleware := middleware.NewJWTAuth(jwtManager)
 	optionalAuthMiddleware := middleware.NewOptionalJWTAuth(jwtManager)
+	internalAuthMiddleware := middleware.NewInternalTokenAuth(cfg.Internal.Token)
 
 	// ============================================================
 	// 12. 路由注册：健康检查、指标、静态资源、公共 API、内部 API
@@ -216,12 +224,20 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 	session := api.Group("/sessions")
 	session.POST("", accountHandler.Login)
 	session.DELETE("/cur", authMiddleware, accountHandler.Logout)
+	session.DELETE("/current", authMiddleware, accountHandler.Logout)
 
-	// 用户资源承载注册、当前用户资料和用户作品列表。
+	// 用户资源承载注册、当前用户资料、关系列表和用户作品列表。
 	users := api.Group("/users")
 	users.POST("", accountHandler.Register)
+	users.GET("/me", authMiddleware, accountHandler.Me)
+	users.PATCH("/me", authMiddleware, accountHandler.UpdateMe)
+	users.GET("/me/videos", authMiddleware, videoHandler.ListMine)
 	users.PUT("/me/following/:targetUserId", authMiddleware, relationHandler.Follow)
 	users.DELETE("/me/following/:targetUserId", authMiddleware, relationHandler.Unfollow)
+	users.GET("/me/following", authMiddleware, relationHandler.ListFollowing)
+	users.GET("/me/followers", authMiddleware, relationHandler.ListFollowers)
+	users.GET("/:userId", accountHandler.Get)
+	users.GET("/:userId/videos", videoHandler.ListByAuthor)
 
 	// 视频资源
 	videos := api.Group("/videos")
@@ -237,6 +253,7 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 
 	// Feed流资源 用户通过游标控制获取视频列表
 	api.GET("/feed-items", optionalAuthMiddleware, feedHandler.ListFeedItems)
+	api.POST("/feed-queries", optionalAuthMiddleware, feedHandler.Query)
 	api.DELETE("/comments/:commentId", authMiddleware, interactionHandler.DeleteComment)
 	api.POST("/video-view-events", authMiddleware, exposureHandler.CreateViewEvent)
 
@@ -249,6 +266,20 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 	api.GET("/playback-config", authMiddleware, playbackHandler.GetConfig)
 	api.GET("/preload-videos", authMiddleware, playbackHandler.ListPreloadVideos)
 	api.POST("/playback-qos-reports", authMiddleware, playbackHandler.CreateQoSReport)
+
+	// 视频上传资源
+	// 静态文件路由让上传后的文件可以通过 /uploads/... 访问。
+	g.Static("/uploads", "./uploads")
+	uploads := api.Group("/uploads", authMiddleware)
+	uploads.POST("", uploadHandler.Create)
+
+	// 内部服务调用接口
+	internal := g.Group("/internal")
+	internal.POST("/recommendation-candidates", recommendationHandler.ListCandidates)
+	internal.POST("/exposure-decisions", recommendationHandler.DecideExposures)
+	internal.POST("/exposures", recommendationHandler.SaveExposures)
+	internal.POST("/messages", internalAuthMiddleware, messageHandler.Create)
+	internal.POST("/playback-qos-reports", internalAuthMiddleware, playbackHandler.CreateInternalQoSReport)
 
 	// 检查路由提供后端服务基本状况检查
 	g.GET("/health", HealthCheck(db, rdb))

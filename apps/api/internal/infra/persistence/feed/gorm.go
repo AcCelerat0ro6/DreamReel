@@ -121,9 +121,9 @@ func (r *Repository) BatchGetFeedStats(ctx context.Context, videoIDs []int64) (m
 		return stats, nil
 	}
 
-	// 即使未在数据库中找到统计记录，我们也按0处理
+	// 即使未在数据库中找到统计记录，我们也按 0 处理并保留对应 VideoID
 	for _, videoID := range videoIDs {
-		stats[videoID] = &domainfeed.FeedStat{}
+		stats[videoID] = &domainfeed.FeedStat{VideoID: videoID}
 	}
 
 	var models []domainfeed.FeedStat
@@ -142,7 +142,7 @@ func (r *Repository) BatchGetFeedStats(ctx context.Context, videoIDs []int64) (m
 	return stats, nil
 }
 
-// BatchGetViewerActionStates 批量读取当前用户对视频的点赞和收藏状态。
+// BatchGetViewerActions 批量读取当前用户对视频的点赞和收藏状态。
 func (r *Repository) BatchGetViewerActions(ctx context.Context, viewerID int64, videoIDs []int64) (map[int64]*domainfeed.ViewerActionState, error) {
 	states := map[int64]*domainfeed.ViewerActionState{}
 	if viewerID <= 0 || len(videoIDs) == 0 {

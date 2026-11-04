@@ -2,8 +2,10 @@ package infrarecommendation
 
 import (
 	domainembedding "DreamReel/internal/domain/embedding"
+	domainexposure "DreamReel/internal/domain/exposure"
 	domainrecommendation "DreamReel/internal/domain/recommendation"
 	domainvideo "DreamReel/internal/domain/video"
+	infraexposure "DreamReel/internal/infra/persistence/exposure"
 	"context"
 	"database/sql"
 	"errors"
@@ -190,7 +192,6 @@ func (r *Repository) ListRecentBehaviorSamples(ctx context.Context, userID int64
 		return nil, err
 	}
 	return samples, nil
-
 }
 
 // SaveUserInterestProfile 使用 user_id + model upsert，重复或乱序行为事件覆盖最新兴趣向量且保持 last_event_id 单调递增。
@@ -219,4 +220,133 @@ func (r *Repository) SaveUserInterestProfile(ctx context.Context, profile *domai
 			"updated_at":     gorm.Expr("VALUES(updated_at)"),
 		}),
 	}).Create(&model).Error
+}
+
+// ListRecentExposures 查询指定时间窗口内的曝光聚合记录。
+func (r *Repository) ListRecentExposures(ctx context.Context, userID int64, videoIDs []int64, since time.Time) ([]*domainrecommendation.Exposure, error) {
+	if len(videoIDs) == 0 {
+		return []*domainrecommendation.Exposure{}, nil
+	}
+
+	var models []infraexposure.ExposureModel
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND video_id IN ? AND last_exposed_at >= ?", userID, videoIDs, since).
+		Find(&models).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	exposures := make([]*domainrecommendation.Exposure, 0, len(models))
+	for _, model := range models {
+		exposures = append(exposures, restoreExposure(model))
+	}
+	return exposures, nil
+}
+
+// SaveExposures 在同一事务内写入观看行为流水并聚合更新 exposures 表。
+func (r *Repository) SaveExposures(ctx context.Context, writes []*domainrecommendation.ExposureWrite) ([]*domainrecommendation.Exposure, error) {
+	if len(writes) == 0 {
+		return []*domainrecommendation.Exposure{}, nil
+	}
+
+	exposures := make([]*domainrecommendation.Exposure, 0, len(writes))
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, write := range writes {
+			if write == nil {
+				continue
+			}
+			if err := ensurePublishedVideo(tx, write.VideoID); err != nil {
+				return err
+			}
+			event := infraexposure.ViewEventModel{
+				UserID:    write.UserID,
+				VideoID:   write.VideoID,
+				Scene:     write.Scene,
+				RequestID: stringPtr(write.RequestID),
+				EventType: domainexposure.EventTypeExposed,
+				WatchMs:   0,
+				Completed: false,
+			}
+			if err := tx.Create(&event).Error; err != nil {
+				return err
+			}
+			model := infraexposure.ExposureModel{
+				UserID:         write.UserID,
+				VideoID:        write.VideoID,
+				FirstExposedAt: event.CreatedAt,
+				LastExposedAt:  event.CreatedAt,
+				ExposureCount:  1,
+				LastScene:      write.Scene,
+			}
+			if err := tx.Clauses(clause.OnConflict{
+				Columns: []clause.Column{
+					{Name: "user_id"},
+					{Name: "video_id"},
+				},
+				DoUpdates: clause.Assignments(map[string]any{
+					"last_exposed_at": gorm.Expr("VALUES(last_exposed_at)"),
+					"exposure_count":  gorm.Expr("exposure_count + 1"),
+					"last_scene":      gorm.Expr("VALUES(last_scene)"),
+					"updated_at":      gorm.Expr("VALUES(updated_at)"),
+				}),
+			}).Create(&model).Error; err != nil {
+				return err
+			}
+
+			var saved infraexposure.ExposureModel
+			if err := tx.Where("user_id = ? AND video_id = ?", write.UserID, write.VideoID).Take(&saved).Error; err != nil {
+				return err
+			}
+			exposures = append(exposures, restoreExposure(saved))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, mapRecommendationError(err)
+	}
+	return exposures, nil
+}
+
+func ensurePublishedVideo(tx *gorm.DB, videoID int64) error {
+	var item struct {
+		ID int64
+	}
+	err := tx.Table("video").
+		Select("id").
+		Where("id = ? AND status = ?", videoID, domainvideo.StatusPublished).
+		Take(&item).
+		Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domainrecommendation.ErrVideoNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+func restoreExposure(model infraexposure.ExposureModel) *domainrecommendation.Exposure {
+	return domainrecommendation.RestoreExposure(
+		model.ID,
+		model.UserID,
+		model.VideoID,
+		model.FirstExposedAt,
+		model.LastExposedAt,
+		model.ExposureCount,
+		model.LastScene,
+	)
+}
+
+func mapRecommendationError(err error) error {
+	if errors.Is(err, domainrecommendation.ErrVideoNotFound) {
+		return err
+	}
+	return err
+}
+
+func stringPtr(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }

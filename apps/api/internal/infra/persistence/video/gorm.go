@@ -156,3 +156,29 @@ func (r *Repository) FindByID(ctx context.Context, id int64) (*domainvideo.Video
 	}
 	return restorevideo(model), nil
 }
+
+// ListByAuthor 按发布时间倒序返回作者已发布视频。
+func (r *Repository) ListByAuthor(ctx context.Context, authorID int64, limit, offset int) ([]*domainvideo.Video, error) {
+	var models []videoWithStatModel
+	err := r.db.WithContext(ctx).
+		Table("video AS v").
+		Select(videoWithStatSelect()).
+		Joins("LEFT JOIN video_stat AS vs ON vs.video_id = v.id").
+		Where("v.author_id = ? AND v.status = ?", authorID, domainvideo.StatusPublished).
+		Order("v.published_at DESC").
+		Order("v.id DESC").
+		Limit(limit).
+		Offset(offset).
+		Scan(&models).
+		Error
+	if err != nil {
+		return nil, err
+	}
+
+	videos := make([]*domainvideo.Video, 0, len(models))
+	for _, model := range models {
+		// 查询模型逐条恢复为领域对象，应用层无需知道数据库联表细节。
+		videos = append(videos, restorevideo(model))
+	}
+	return videos, nil
+}

@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// RecommendStrategy 使用推荐策略返回推荐流
+// RecommendStrategy 使用推荐策略返回推荐流。
 type RecommendStrategy struct {
 	repo        domainfeed.Repository
 	cache       FeedCache
@@ -28,9 +28,12 @@ func NewRecommendStrategy(repo domainfeed.Repository, recommender Recommender) *
 	}
 }
 
+// WithRecommender 注册个性化推荐策略；未注入推荐服务时不注册，避免空指针异常。
 func WithRecommender(recommender Recommender) Option {
 	return func(s *Service) {
-		s.RegisterStrategy(NewRecommendStrategy(s.repo, recommender))
+		if recommender != nil {
+			s.RegisterStrategy(NewRecommendStrategy(s.repo, recommender))
+		}
 	}
 }
 

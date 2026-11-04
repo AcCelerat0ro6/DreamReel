@@ -61,7 +61,7 @@ func (s *TimelineStrategy) List(ctx context.Context, req FeedRequest) (*FeedResu
 		return nil, ErrLoadFeedFailed
 	}
 	return &FeedResult{
-		Scene:      req.Scene,
+		Scene:      s.scene,
 		Items:      items,
 		NextCursor: page.NextCursor,
 		HasMore:    page.HasMore,
@@ -84,7 +84,7 @@ func (s *TimelineStrategy) listPageFromRepo(ctx context.Context, parsedCursor *d
 	}
 
 	var NextCursor string
-	if hasMore && len(items) > 0 {
+	if len(items) > 0 {
 		// cursor记录最后一条视频卡片数据， 在下一页查找时会跳过它
 		NextCursor = encodeTimelineCursor(&domainfeed.TimelineCursor{
 			PublishedAt: items[len(items)-1].PublishedAt,

@@ -50,7 +50,38 @@ type CandidateRequest struct {
 	Limit     int
 }
 
-// NewCandidateRequest 转换领域模型的同时，校验相应字段是否正确
+type ExposureWrite struct {
+	UserID    int64
+	VideoID   int64
+	Scene     string
+	RequestID string
+}
+
+type ExposureDecisionRequest struct {
+	UserID    int64
+	Scene     string
+	RequestID string
+	VideoIDs  []int64
+}
+
+type Exposure struct {
+	ID             int64
+	UserID         int64
+	VideoID        int64
+	FirstExposedAt time.Time
+	LastExposedAt  time.Time
+	ExposureCount  int
+	LastScene      string
+}
+
+type ExposureDecision struct {
+	VideoID       int64
+	Allowed       bool
+	Reason        string
+	LastExposedAt *time.Time
+}
+
+// NewCandidateRequest 转换领域模型的同时，校验相应字段是否正确。
 func NewCandidateRequest(userID int64, scene string, requestID string, cursor *Cursor, limit int) (*CandidateRequest, error) {
 	if userID <= 0 {
 		return nil, ErrInvalidUserID
@@ -81,6 +112,69 @@ func NewCandidateRequest(userID int64, scene string, requestID string, cursor *C
 	}, nil
 }
 
+// NewExposureDecisionRequest 创建曝光去重判定请求并对候选视频 ID 去重。
+func NewExposureDecisionRequest(userID int64, scene string, requestID string, videoIDs []int64) (*ExposureDecisionRequest, error) {
+	if userID <= 0 {
+		return nil, ErrInvalidUserID
+	}
+	scene = strings.TrimSpace(strings.ToLower(scene))
+	requestID = strings.TrimSpace(requestID)
+	if scene == "" {
+		return nil, ErrEmptyScene
+	}
+	if len(scene) > MaxSceneLength {
+		return nil, ErrSceneTooLong
+	}
+	if len(requestID) > MaxRequestIDLength {
+		return nil, ErrRequestIDTooLong
+	}
+	deduped := make([]int64, 0, len(videoIDs))
+	seen := map[int64]struct{}{}
+	for _, videoID := range videoIDs {
+		if videoID <= 0 {
+			return nil, ErrInvalidVideoID
+		}
+		if _, exists := seen[videoID]; exists {
+			continue
+		}
+		seen[videoID] = struct{}{}
+		deduped = append(deduped, videoID)
+	}
+	return &ExposureDecisionRequest{
+		UserID:    userID,
+		Scene:     scene,
+		RequestID: requestID,
+		VideoIDs:  deduped,
+	}, nil
+}
+
+// NewExposureWrite 创建并校验单条曝光写入指令。
+func NewExposureWrite(userID int64, videoID int64, scene string, requestID string) (*ExposureWrite, error) {
+	if userID <= 0 {
+		return nil, ErrInvalidUserID
+	}
+	if videoID <= 0 {
+		return nil, ErrInvalidVideoID
+	}
+	scene = strings.TrimSpace(strings.ToLower(scene))
+	requestID = strings.TrimSpace(requestID)
+	if scene == "" {
+		return nil, ErrEmptyScene
+	}
+	if len(scene) > MaxSceneLength {
+		return nil, ErrSceneTooLong
+	}
+	if len(requestID) > MaxRequestIDLength {
+		return nil, ErrRequestIDTooLong
+	}
+	return &ExposureWrite{
+		UserID:    userID,
+		VideoID:   videoID,
+		Scene:     scene,
+		RequestID: requestID,
+	}, nil
+}
+
 func RestoreCandidate(videoID int64, authorID int64, rankScore float64, similarity float64, hotScore int, freshnessScore float64, reason string, publishedAt time.Time) *Candidate {
 	return &Candidate{
 		VideoID:        videoID,
@@ -91,6 +185,32 @@ func RestoreCandidate(videoID int64, authorID int64, rankScore float64, similari
 		FreshnessScore: freshnessScore,
 		Reason:         strings.TrimSpace(reason),
 		PublishedAt:    publishedAt,
+	}
+}
+
+func RestoreExposure(id int64, userID int64, videoID int64, firstExposedAt time.Time, lastExposedAt time.Time, exposureCount int, lastScene string) *Exposure {
+	return &Exposure{
+		ID:             id,
+		UserID:         userID,
+		VideoID:        videoID,
+		FirstExposedAt: firstExposedAt,
+		LastExposedAt:  lastExposedAt,
+		ExposureCount:  exposureCount,
+		LastScene:      strings.TrimSpace(lastScene),
+	}
+}
+
+func RestoreExposureDecision(videoID int64, allowed bool, reason string, lastExposedAt *time.Time) *ExposureDecision {
+	var exposedAt *time.Time
+	if lastExposedAt != nil {
+		value := *lastExposedAt
+		exposedAt = &value
+	}
+	return &ExposureDecision{
+		VideoID:       videoID,
+		Allowed:       allowed,
+		Reason:        strings.TrimSpace(reason),
+		LastExposedAt: exposedAt,
 	}
 }
 
@@ -105,6 +225,21 @@ type UserInterestProfile struct {
 	LastEventID   int64
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+// RestoreUserInterestProfile 从数据库记录恢复用户推荐兴趣向量领域对象。
+func RestoreUserInterestProfile(userID int64, model string, dimension int, embedding []float64, embeddingJSON string, sampleCount int, lastEventID int64, createdAt time.Time, updatedAt time.Time) *UserInterestProfile {
+	return &UserInterestProfile{
+		UserID:        userID,
+		Model:         strings.TrimSpace(model),
+		Dimension:     dimension,
+		Embedding:     cloneFloat64Slice(embedding),
+		EmbeddingJSON: strings.TrimSpace(embeddingJSON),
+		SampleCount:   sampleCount,
+		LastEventID:   lastEventID,
+		CreatedAt:     createdAt,
+		UpdatedAt:     updatedAt,
+	}
 }
 
 // IsProfileTriggerEvent 判断观看事件是否属于触发推荐画像更新的正反馈行为。
@@ -122,7 +257,6 @@ func IsProfileTriggerEvent(eventType string, completed bool) bool {
 	default:
 		return false
 	}
-
 }
 
 // BehaviorSample 保存一条参与画像聚合的观看行为及对应视频向量。
@@ -243,7 +377,6 @@ func NewUserInterestProfile(userID int64, model string, embedding []float64, emb
 		SampleCount:   sampleCount,
 		LastEventID:   lastEventID,
 	}, nil
-
 }
 
 func cloneFloat64Slice(vector []float64) []float64 {

@@ -179,3 +179,30 @@ func (s *Service) Get(ctx context.Context, videoID int64) (*domainvideo.Video, e
 
 	return video, nil
 }
+
+// ListByAuthor 查询某个作者公开发布的视频列表，使用 offset 分页。
+func (s *Service) ListByAuthor(ctx context.Context, authorID int64, limit, offset int) ([]*domainvideo.Video, error) {
+	if authorID <= 0 {
+		return nil, domainvideo.ErrInvalidAuthorID
+	}
+	if limit <= 0 {
+		return nil, domainvideo.ErrInvalidLimit
+	}
+	if offset < 0 {
+		return nil, domainvideo.ErrInvalidOffset
+	}
+	if limit > 100 {
+		// 后端限制最大页大小，避免一次请求拉取过多数据。
+		limit = 100
+	}
+
+	videos, err := s.repo.ListByAuthor(ctx, authorID, limit, offset)
+	if err != nil {
+		zap.L().Error("list videos by author failed",
+			zap.Int64("author_id", authorID),
+			zap.Error(err),
+		)
+		return nil, ErrLoadVideoFailed
+	}
+	return videos, nil
+}

@@ -13,6 +13,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const defaultListLimit = 20
+
 type Handler struct {
 	service *applicationvideo.Service
 }
@@ -101,12 +103,86 @@ func (h *Handler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, videoCreateResponseFromDomain(video))
 }
 
+// ListByAuthor 查询指定用户的公开作品列表。
+func (h *Handler) ListByAuthor(c *gin.Context) {
+	authorID, err := parsePositiveInt64(c.Param("userId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	limit, offset, err := parsePagination(c)
+	if err != nil {
+		writeVideoError(c, err)
+		return
+	}
+
+	videos, err := h.service.ListByAuthor(c.Request.Context(), authorID, limit, offset)
+	if err != nil {
+		writeVideoError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, videoListResponseFromDomain(videos, limit, offset))
+}
+
+// ListMine 查询当前登录用户自己的作品列表。
+func (h *Handler) ListMine(c *gin.Context) {
+	userID, ok := utils.GetUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid access token"})
+		return
+	}
+
+	limit, offset, err := parsePagination(c)
+	if err != nil {
+		writeVideoError(c, err)
+		return
+	}
+
+	videos, err := h.service.ListByAuthor(c.Request.Context(), userID, limit, offset)
+	if err != nil {
+		writeVideoError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, videoListResponseFromDomain(videos, limit, offset))
+}
+
 func parsePositiveInt64(raw string) (int64, error) {
 	value, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
 	if err != nil || value <= 0 {
 		return 0, domainvideo.ErrInvalidVideoID
 	}
 	return value, nil
+}
+
+// parsePagination 解析 offset 分页参数，默认 limit 在 Handler 层给出。
+func parsePagination(c *gin.Context) (int, int, error) {
+	limit := defaultListLimit
+	offset := 0
+
+	rawLimit := strings.TrimSpace(c.Query("limit"))
+	if rawLimit != "" {
+		// limit 必须为正数，应用层会进一步限制最大值。
+		value, err := strconv.Atoi(rawLimit)
+		if err != nil || value <= 0 {
+			return 0, 0, domainvideo.ErrInvalidLimit
+		}
+		limit = value
+	}
+
+	rawOffset := strings.TrimSpace(c.Query("offset"))
+	if rawOffset != "" {
+		// offset 允许为 0，表示从第一条开始。
+		value, err := strconv.Atoi(rawOffset)
+		if err != nil || value < 0 {
+			return 0, 0, domainvideo.ErrInvalidOffset
+		}
+		offset = value
+	}
+
+	return limit, offset, nil
 }
 
 func writeVideoError(c *gin.Context, err error) {

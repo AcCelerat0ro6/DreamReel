@@ -75,8 +75,6 @@ func (r *Repository) MarkRead(ctx context.Context, userID int64, messageIDs []in
 		Where("user_id = ? AND is_read = ?", userID, false)
 	if len(messageIDs) > 0 {
 		query = query.Where("id IN ?", messageIDs)
-	} else {
-		return 0, nil
 	}
 
 	result := query.Updates(map[string]any{
@@ -103,6 +101,7 @@ func (r *Repository) CountUnread(ctx context.Context, userID int64) (int, error)
 
 // Create 保存新消息；事件 ID 或幂等键命中时返回既有消息。
 func (r *Repository) Create(ctx context.Context, message *domainmessage.Message, idempotencyKey string) (*domainmessage.Message, bool, error) {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	var model MessageModel
 	model = MessageModel{
 		UserID:         message.UserID,

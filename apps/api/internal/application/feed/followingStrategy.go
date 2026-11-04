@@ -72,7 +72,7 @@ func (s *FollowingStrategy) listPageFromRepo(ctx context.Context, viewerID int64
 	}
 
 	nextCursor := ""
-	if len(items) > 0 {
+	if hasMore && len(items) > 0 {
 		nextCursor = encodeTimelineCursor(&domainfeed.TimelineCursor{
 			PublishedAt: items[len(items)-1].PublishedAt,
 			VideoID:     items[len(items)-1].VideoID,

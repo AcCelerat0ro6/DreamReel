@@ -22,7 +22,7 @@ func New(service *applicationfeed.Service) *Handler {
 	return &Handler{service: service}
 }
 
-// ListFeedItems 列出指定 scene 的 Feed列表
+// ListFeedItems 列出指定 scene 的 Feed 列表，cursor 和 limit 来自 query 参数。
 func (h *Handler) ListFeedItems(c *gin.Context) {
 	limit, err := parseLimit(c.Query("limit"))
 	if err != nil {
@@ -43,7 +43,53 @@ func (h *Handler) ListFeedItems(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, TurnApplicationResultIntoResponse(result))
+}
 
+// Query 通过请求体接收复杂 Feed 查询参数，适合推荐上下文逐步扩展。
+func (h *Handler) Query(c *gin.Context) {
+	var req feedQueryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	limit, err := parseBodyLimit(req.Limit)
+	if err != nil {
+		writeFeedError(c, err)
+		return
+	}
+
+	viewerID, _ := httputils.GetUserID(c)
+	result, err := h.service.GetFeed(c.Request.Context(), applicationfeed.FeedRequest{
+		Scene:         domainfeed.Scene(req.Scene),
+		Cursor:        req.Cursor,
+		Limit:         limit,
+		ViewerID:      viewerID,
+		ClientContext: req.ClientContext,
+	})
+	if err != nil {
+		writeFeedError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, TurnApplicationResultIntoResponse(result))
+}
+
+// Refresh 从第一页重新读取 Feed，适合下拉刷新语义。
+func (h *Handler) Refresh(c *gin.Context) {
+	limit, err := parseLimit(c.Query("limit"))
+	if err != nil {
+		writeFeedError(c, err)
+		return
+	}
+
+	result, err := h.service.RefreshFeed(c.Request.Context(), limit)
+	if err != nil {
+		writeFeedError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, TurnApplicationResultIntoResponse(result))
 }
 
 // isBadRequestError 判断 Feed 参数错误。
@@ -76,4 +122,15 @@ func parseLimit(limit string) (int, error) {
 		return 0, domainfeed.ErrInvalidLimit
 	}
 	return limited, nil
+}
+
+// parseBodyLimit 校验 JSON 请求体中的 limit，空值交给应用服务使用默认页大小。
+func parseBodyLimit(value *int) (int, error) {
+	if value == nil {
+		return 0, nil
+	}
+	if *value <= 0 {
+		return 0, domainfeed.ErrInvalidLimit
+	}
+	return *value, nil
 }

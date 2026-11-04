@@ -4,10 +4,14 @@ import (
 	"context"
 )
 
-// Repository接口仅定义账号领域需要的持久化能力
+// Repository 定义账号领域需要的持久化能力，应用层只依赖这个接口。
 type Repository interface {
-	// 添加新账户
+	// Save 保存新用户，账号重复时返回 ErrAccountAlreadyExists。
 	Save(ctx context.Context, user *User) error
-	// FindUserByAccount 通过账户名查找用户
-	FindUserByAccount(ctx context.Context, account string) (*User, error)
+	// FindByAccount 用于登录流程通过账号查找用户。
+	FindByAccount(ctx context.Context, account string) (*User, error)
+	// FindByID 用于根据登录态或用户 ID 读取用户。
+	FindByID(ctx context.Context, id int64) (*User, error)
+	// UpdateProfile 只更新用户展示资料字段。
+	UpdateProfile(ctx context.Context, user *User) error
 }

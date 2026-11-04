@@ -49,6 +49,31 @@ type CandidateResult struct {
 	HasMore    bool
 }
 
+type ExposureInput struct {
+	UserID    int64
+	VideoID   int64
+	Scene     string
+	RequestID string
+}
+
+type ExposureDecisionInput struct {
+	UserID    int64
+	Scene     string
+	RequestID string
+	VideoIDs  []int64
+}
+
+type ExposureDecisionResult struct {
+	UserID    int64
+	Scene     string
+	RequestID string
+	Decisions []*domainrecommendation.ExposureDecision
+}
+
+type ExposureResult struct {
+	Exposures []*domainrecommendation.Exposure
+}
+
 type cursorPayload struct {
 	RankScore   float64 `json:"rank_score"`
 	PublishedAt string  `json:"published_at"`

@@ -13,11 +13,10 @@ const (
 // Scene 表示不同 Feed 场景，应用层通过场景选择对应策略。
 type Scene string
 
-// NormalizeScene 初始化 scene 参数格式，空值使用默认 Feed 场景。
+// NormalizeScene 统一 scene 参数格式，空值使用默认 Feed 场景。
 func NormalizeScene(scene Scene) Scene {
 	value := strings.TrimSpace(strings.ToLower(string(scene)))
-	if value == "" ||
-		(Scene(value) != SceneTimeline && Scene(value) != SceneRecommend && Scene(value) != SceneFollowing && Scene(value) != SceneHot) {
+	if value == "" {
 		return DefaultScene
 	}
 	return Scene(value)
@@ -56,7 +55,7 @@ type FeedItem struct {
 	ModelName *string
 }
 
-// FeedPage 代表一个视频的最小卡片数据，剩余的数据与缓存分开存储组装
+// FeedPageItem 代表一个视频的最小卡片数据，剩余的数据与缓存分开存储组装
 type FeedPageItem struct {
 	VideoID     int64
 	AuthorID    int64

@@ -50,7 +50,6 @@ func (h *Handler) ListPreloadVideos(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, preloadResponseFromResult(result))
-
 }
 
 // CreateQoSReport 处理 Web 客户端播放质量上报。
@@ -60,11 +59,29 @@ func (h *Handler) CreateQoSReport(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid access token"})
 		return
 	}
+	h.createQoSReport(c, userID)
+}
+
+// CreateInternalQoSReport 处理服务间播放质量上报。
+func (h *Handler) CreateInternalQoSReport(c *gin.Context) {
 	var req createQoSReportRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+	h.createQoSReportWithRequest(c, req.UserID, req)
+}
+
+func (h *Handler) createQoSReport(c *gin.Context, userID int64) {
+	var req createQoSReportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	h.createQoSReportWithRequest(c, userID, req)
+}
+
+func (h *Handler) createQoSReportWithRequest(c *gin.Context, userID int64, req createQoSReportRequest) {
 	result, err := h.service.CreateQoSReport(
 		c.Request.Context(),
 		userID,

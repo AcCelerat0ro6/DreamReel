@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+// feedQueryRequest 是复杂 Feed 查询入口的请求体。
+type feedQueryRequest struct {
+	Scene         string            `json:"scene"`
+	Cursor        string            `json:"cursor"`
+	Limit         *int              `json:"limit"`
+	ClientContext map[string]string `json:"context"`
+}
+
 // feedItemsResponse 是 HTTP层 Feed 游标分页响应。
 type feedItemsResponse struct {
 	Scene      string             `json:"scene"`

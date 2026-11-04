@@ -47,7 +47,7 @@ func (s *Service) Login(ctx context.Context, account, password string) (*LoginRe
 		return nil, domainaccount.ErrEmptyAccount
 	}
 
-	user, err := s.repo.FindUserByAccount(ctx, account)
+	user, err := s.repo.FindByAccount(ctx, account)
 	if err != nil {
 		// 判断是否为账号不存在的错误
 		if errors.Is(err, domainaccount.ErrUserNotFound) {
@@ -66,7 +66,7 @@ func (s *Service) Login(ctx context.Context, account, password string) (*LoginRe
 
 	accessToken, err := s.signer.SignAccessToken(user.ID, user.Role)
 	if err != nil {
-		return nil, err
+		return nil, ErrSignAccessTokenFailed
 	}
 
 	return &LoginResult{
@@ -74,4 +74,64 @@ func (s *Service) Login(ctx context.Context, account, password string) (*LoginRe
 		TokenType:        "Bearer",
 		ExpiresInSeconds: int64(s.signer.AccessTTL().Seconds()),
 	}, nil
+}
+
+// GetProfile 根据登录态中的用户 ID 读取当前用户资料。
+func (s *Service) GetProfile(ctx context.Context, userID int64) (*Profile, error) {
+	if userID <= 0 {
+		return nil, domainaccount.ErrInvalidUserID
+	}
+
+	user, err := s.repo.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, domainaccount.ErrUserNotFound) {
+			return nil, domainaccount.ErrUserNotFound
+		}
+		return nil, ErrLoadAccountFailed
+	}
+
+	return TurnUserIntoProfile(user), nil
+}
+
+// GetPublicProfile 根据用户 ID 读取公开资料，用于访问他人主页。
+func (s *Service) GetPublicProfile(ctx context.Context, userID int64) (*Profile, error) {
+	if userID <= 0 {
+		return nil, domainaccount.ErrInvalidUserID
+	}
+
+	user, err := s.repo.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, domainaccount.ErrUserNotFound) {
+			return nil, domainaccount.ErrUserNotFound
+		}
+		return nil, ErrLoadAccountFailed
+	}
+
+	return TurnUserIntoProfile(user), nil
+}
+
+// UpdateProfile 支持部分更新，nil 表示该字段没有出现在请求体中。
+func (s *Service) UpdateProfile(ctx context.Context, userID int64, nickname, avatarURL, bio *string) (*Profile, error) {
+	if userID <= 0 {
+		return nil, domainaccount.ErrInvalidUserID
+	}
+
+	user, err := s.repo.FindByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, domainaccount.ErrUserNotFound) {
+			return nil, domainaccount.ErrUserNotFound
+		}
+		return nil, ErrLoadAccountFailed
+	}
+	if err := user.UpdateProfile(nickname, avatarURL, bio); err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateProfile(ctx, user); err != nil {
+		if errors.Is(err, domainaccount.ErrUserNotFound) {
+			return nil, domainaccount.ErrUserNotFound
+		}
+		return nil, ErrUpdateAccountFailed
+	}
+
+	return TurnUserIntoProfile(user), nil
 }

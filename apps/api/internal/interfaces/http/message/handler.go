@@ -15,7 +15,7 @@ func New(service *applicationmessage.Service) *Handler {
 	return &Handler{service: service}
 }
 
-// list 查询当前用户的消息列表
+// List 查询当前登录用户的消息列表。
 func (h *Handler) List(c *gin.Context) {
 	userID, ok := userIDFromContext(c)
 	if !ok {
@@ -72,5 +72,36 @@ func (h *Handler) CountUnread(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, unreadStatResponse{UnreadCount: stat.UnreadCount})
+}
 
+// Create 供内部事件链路生成用户消息。
+func (h *Handler) Create(c *gin.Context) {
+	var req createMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	result, err := h.service.CreateFromActorEvent(
+		c.Request.Context(),
+		req.UserID,
+		req.Type,
+		req.Title,
+		req.Content,
+		req.EventID,
+		c.GetHeader("Idempotency-Key"),
+		req.ActorID,
+		req.ActorNickname,
+		req.ActorAvatarURL,
+	)
+	if err != nil {
+		writeMessageError(c, err)
+		return
+	}
+
+	status := http.StatusCreated
+	if !result.Created {
+		status = http.StatusOK
+	}
+	c.JSON(status, responseFromDomain(result.Message))
 }

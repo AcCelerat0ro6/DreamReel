@@ -2,6 +2,17 @@ package interfacehttpmessage
 
 import "time"
 
+type createMessageRequest struct {
+	UserID         int64  `json:"user_id"`
+	Type           string `json:"type"`
+	Title          string `json:"title"`
+	Content        string `json:"content"`
+	EventID        string `json:"event_id"`
+	ActorID        int64  `json:"actor_id"`
+	ActorNickname  string `json:"actor_nickname"`
+	ActorAvatarURL string `json:"actor_avatar_url"`
+}
+
 type messageListResponse struct {
 	Items      []messageResponse `json:"items"`
 	NextCursor string            `json:"next_cursor"`
