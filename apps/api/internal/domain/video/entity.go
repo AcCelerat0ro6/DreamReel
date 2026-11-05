@@ -16,7 +16,6 @@ const (
 	MaxIdempotencyKeyLength = 128
 
 	MaxModelNameLength   = 64
-	MaxPromptLength      = 2048
 	MaxModelParamsLength = 1024
 	MaxAIStyleTagLength  = 32
 )
@@ -92,6 +91,21 @@ func NewPublished(authorID int64, title, description, mediaURL, coverURL string,
 	if len(idempotencyKey) == 0 {
 		idempotencyKeyPtr = nil
 	}
+
+	// AIGC 元数据归一化与长度校验（所有字段可选）
+	normalizedModelName, err := normalizeOptionalString(modelName, MaxModelNameLength, ErrModelNameTooLong)
+	if err != nil {
+		return nil, err
+	}
+	normalizedModelParams, err := normalizeOptionalString(modelParams, MaxModelParamsLength, ErrModelParamsTooLong)
+	if err != nil {
+		return nil, err
+	}
+	normalizedAIStyleTag, err := normalizeOptionalString(aiStyleTag, MaxAIStyleTagLength, ErrAIStyleTagTooLong)
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 	video := &Video{
 		AuthorID:       authorID,
@@ -102,10 +116,25 @@ func NewPublished(authorID int64, title, description, mediaURL, coverURL string,
 		Status:         StatusPublished,
 		PublishedAt:    &now,
 		IdempotencyKey: idempotencyKeyPtr,
-		ModelName:      modelName,
-		ModelParams:    modelParams,
-		AIStyleTag:     aiStyleTag,
+		ModelName:      normalizedModelName,
+		ModelParams:    normalizedModelParams,
+		AIStyleTag:     normalizedAIStyleTag,
 		OriginVideoID:  originVideoID,
 	}
 	return video, nil
+}
+
+// normalizeOptionalString 去除可选字符串首尾空白并校验最大长度；空白字符串归一化为 nil。
+func normalizeOptionalString(raw *string, maxLen int, tooLongErr error) (*string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if len(trimmed) > maxLen {
+		return nil, tooLongErr
+	}
+	return &trimmed, nil
 }

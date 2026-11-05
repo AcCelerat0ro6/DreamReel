@@ -74,9 +74,11 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 		return err
 	}
 
-	// 1.3 Redis 初始化
+	// 1.3 Redis 初始化：优先复用入口层注入的 rdb；若未注入但配置了地址，则按配置创建客户端。
 	var feedCache *cache.FeedCache
-	if cfg.Redis.Addr != "" {
+	if rdb != nil {
+		feedCache = cache.NewFeedCache(rdb)
+	} else if cfg.Redis.Addr != "" {
 		redisClient := cache.NewRedisClient(cfg.Redis)
 		feedCache = cache.NewFeedCache(redisClient)
 	}
@@ -291,19 +293,23 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 func HealthCheck(db *sql.DB, rdb *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		if err := db.PingContext(ctx); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"status": "unhealthy",
-				"db":     "down",
-			})
-			return
+		if db != nil {
+			if err := db.PingContext(ctx); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{
+					"status": "unhealthy",
+					"db":     "down",
+				})
+				return
+			}
 		}
-		if err := rdb.Ping(ctx).Err(); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"status": "unhealthy",
-				"redis":  "down",
-			})
-			return
+		if rdb != nil {
+			if err := rdb.Ping(ctx).Err(); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{
+					"status": "unhealthy",
+					"redis":  "down",
+				})
+				return
+			}
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "The server is running normally."})
 	}

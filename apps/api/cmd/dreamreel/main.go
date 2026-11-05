@@ -16,10 +16,11 @@ import (
 	"DreamReel/internal/infra/redis"
 	"DreamReel/internal/interfaces/http/router"
 
+	goredis "github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
-const defaultConfigPath = "G:\\GoCode\\DreamReel\\apps\\api\\configs\\config.yaml"
+const defaultConfigPath = "./configs/config.yaml"
 
 func main() {
 	if err := run(); err != nil {
@@ -63,17 +64,22 @@ func run() error {
 	}()
 	zap.L().Info("数据库连接成功")
 
-	// 初始化Redis连接
-	rdb, err := redis.NewRedisClient(ctx, cfg.Redis)
-	if err != nil {
-		return fmt.Errorf("初始化 Redis 失败: %w", err)
-	}
-	defer func() {
-		if err := rdb.Close(); err != nil {
-			zap.L().Warn("关闭 Redis 连接失败", zap.Error(err))
+	// 初始化Redis连接（可选基础设施，连接失败时降级运行）
+	var rdb *goredis.Client
+	if cfg.Redis.Addr != "" {
+		rdb, err = redis.NewRedisClient(ctx, cfg.Redis)
+		if err != nil {
+			zap.L().Error("初始化 Redis 失败，将降级运行", zap.Error(err))
+			rdb = nil
+		} else {
+			defer func() {
+				if err := rdb.Close(); err != nil {
+					zap.L().Warn("关闭 Redis 连接失败", zap.Error(err))
+				}
+			}()
+			zap.L().Info("Redis 连接成功")
 		}
-	}()
-	zap.L().Info("Redis 连接成功")
+	}
 
 	// 初始化RabbitMQ连接（可选基础设施，连接失败时降级运行）
 	var rabbitMQ *mq.RabbitMQ

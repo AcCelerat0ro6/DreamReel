@@ -39,6 +39,14 @@ func NewFanoutWorker(repo FanoutRepository, consumer PublishedEventConsumer, ind
 	return worker
 }
 
+func WithFanoutBatchSize(size int) FanoutWorkerOption {
+	return func(w *FanoutWorker) {
+		if size > 0 {
+			w.batchSize = size
+		}
+	}
+}
+
 type FanoutRepository interface {
 	// CountFollowers 计算关注者数量
 	CountFollowers(ctx context.Context, authorID int64) (int, error)

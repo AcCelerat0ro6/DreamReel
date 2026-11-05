@@ -1,0 +1,63 @@
+=== RUN   TestAuditLiveChains
+    chain_audit_test.go:188: isolated real infrastructure: MySQL=dreamreel_audit_1793848003486511700 RedisDB=15 RabbitMQ=dreamreel.audit.1793848003486511700
+=== RUN   TestAuditLiveChains/01_smoke_registration_follow_publish_workers
+
+2026/11/05 11:06:44 [31;1mG:/GoCode/DreamReel/apps/api/internal/infra/persistence/relation/gorm.go:252 [35;1mrecord not found
+[0m[33m[0.653ms] [34;1m[rows:0][0m SELECT * FROM `user_follow` WHERE user_id = 2 AND target_user_id = 1 LIMIT 1 FOR UPDATE
+
+2026/11/05 11:06:44 [31;1mG:/GoCode/DreamReel/apps/api/internal/infra/persistence/recommendation/gorm.go:97 [35;1mrecord not found
+[0m[33m[1.278ms] [34;1m[rows:0][0m SELECT * FROM `user_interest_profile` WHERE user_id = 2 AND model = 'hash-ngram-v1' AND updated_at >= '2026-10-06 11:06:44.735' LIMIT 1
+=== RUN   TestAuditLiveChains/02_smoke_interactions_messages_exposure_playback
+
+2026/11/05 11:06:44 [31;1mG:/GoCode/DreamReel/apps/api/internal/infra/persistence/playback/gorm.go:27 [35;1mrecord not found
+[0m[33m[1.753ms] [34;1m[rows:0][0m SELECT * FROM `playback_config` WHERE platform = 'Web' AND network_type = 'DEFAULT' LIMIT 1
+=== RUN   TestAuditLiveChains/03_internal_routes_require_auth
+    chain_audit_test.go:277: unauthenticated /internal/recommendation-candidates: HTTP 200
+    chain_audit_test.go:277: unauthenticated /internal/exposure-decisions: HTTP 200
+    chain_audit_test.go:277: unauthenticated /internal/exposures: HTTP 201
+=== RUN   TestAuditLiveChains/04_comment_count_survives_json_ttl
+    chain_audit_test.go:292: comment cache stale: Redis=&{VideoID:1 LikeCount:1 CommentCount:0 FavoriteCount:1} MySQL=1
+=== RUN   TestAuditLiveChains/05_cold_action_cache_unlike_reaches_mysql
+    chain_audit_test.go:306: unlike HTTP 200 but MySQL remains active: status=1 like_count=1
+=== RUN   TestAuditLiveChains/06_unfollow_removes_old_inbox_items
+    chain_audit_test.go:314: unfollowed author still in following feed: items=1
+=== RUN   TestAuditLiveChains/07_deleted_video_not_served_from_cache
+
+2026/11/05 11:06:45 [31;1mG:/GoCode/DreamReel/apps/api/internal/infra/persistence/video/gorm.go:149 [35;1mrecord not found
+[0m[33m[0.783ms] [34;1m[rows:0][0m SELECT v.id, v.author_id, v.title, v.description, v.media_url, v.cover_url, v.status, COALESCE(vs.like_count, 0) AS like_count, COALESCE(vs.comment_count, 0) AS comment_count, COALESCE(vs.favorite_count, 0) AS favorite_count, v.published_at, v.idempotency_key, v.created_at, v.updated_at, v.model_name, v.model_params, v.ai_style_tag, v.origin_video_id FROM video AS v LEFT JOIN video_stat AS vs ON vs.video_id = v.id WHERE v.id = 1 AND v.status = 2 LIMIT 1
+    chain_audit_test.go:324: deleted video still in cached timeline: items=1
+=== RUN   TestAuditLiveChains/08_logout_revokes_old_token
+    chain_audit_test.go:331: logout leaves JWT usable: HTTP 200
+=== RUN   TestAuditLiveChains/09_disabled_account_cannot_publish
+    chain_audit_test.go:341: disabled account can publish: HTTP 201
+=== RUN   TestAuditLiveChains/10_html_upload_is_not_executable_on_app_origin
+    chain_audit_test.go:366: HTML upload is publicly served inline: HTTP 200 content-type=text/html; charset=utf-8
+=== RUN   TestAuditLiveChains/11_following_and_hot_fall_back_on_redis_failure
+redis: 2026/11/05 11:06:45 pool.go:762: redis: connection pool: failed to dial after 5 attempts: dial tcp 127.0.0.1:1: connectex: No connection could be made because the target machine actively refused it.
+    chain_audit_test.go:376: following returns error instead of DB fallback: failed to load feed: dial tcp 127.0.0.1:1: connectex: No connection could be made because the target machine actively refused it.
+redis: 2026/11/05 11:06:46 pool.go:762: redis: connection pool: failed to dial after 5 attempts: dial tcp 127.0.0.1:1: connectex: No connection could be made because the target machine actively refused it.
+    chain_audit_test.go:376: hot returns error instead of DB fallback: failed to load feed
+=== RUN   TestAuditLiveChains/12_publish_failure_is_repaired_on_idempotent_retry
+    chain_audit_test.go:399: DB saved video and both calls succeeded, but publication event was lost: first_created=true retry_created=false embeddings=0
+=== RUN   TestAuditLiveChains/13_recommendation_pages_beyond_initial_pool
+    chain_audit_test.go:429: fixed pool cuts off later recommendation pages: seen=80 published=102
+=== RUN   TestAuditLiveChains/14_out_of_order_action_events_keep_latest_state
+    chain_audit_test.go:450: older event overwrites newer unlike: status=1
+--- FAIL: TestAuditLiveChains (4.17s)
+    --- PASS: TestAuditLiveChains/01_smoke_registration_follow_publish_workers (0.13s)
+    --- PASS: TestAuditLiveChains/02_smoke_interactions_messages_exposure_playback (0.15s)
+    --- FAIL: TestAuditLiveChains/03_internal_routes_require_auth (0.01s)
+    --- FAIL: TestAuditLiveChains/04_comment_count_survives_json_ttl (0.00s)
+    --- FAIL: TestAuditLiveChains/05_cold_action_cache_unlike_reaches_mysql (0.31s)
+    --- FAIL: TestAuditLiveChains/06_unfollow_removes_old_inbox_items (0.01s)
+    --- FAIL: TestAuditLiveChains/07_deleted_video_not_served_from_cache (0.01s)
+    --- FAIL: TestAuditLiveChains/08_logout_revokes_old_token (0.00s)
+    --- FAIL: TestAuditLiveChains/09_disabled_account_cannot_publish (0.01s)
+    --- FAIL: TestAuditLiveChains/10_html_upload_is_not_executable_on_app_origin (0.30s)
+    --- FAIL: TestAuditLiveChains/11_following_and_hot_fall_back_on_redis_failure (0.81s)
+    --- FAIL: TestAuditLiveChains/12_publish_failure_is_repaired_on_idempotent_retry (0.27s)
+    --- FAIL: TestAuditLiveChains/13_recommendation_pages_beyond_initial_pool (0.52s)
+    --- FAIL: TestAuditLiveChains/14_out_of_order_action_events_keep_latest_state (0.02s)
+FAIL
+FAIL	DreamReel/test	4.412s
+FAIL
