@@ -400,34 +400,7 @@ func TestAuditLiveChains(t *testing.T) {
 		}
 	})
 	t.Run("13_recommendation_pages_beyond_initial_pool", func(t *testing.T) {
-		s := av.New(iv.New(gd))
-		for i := 0; i < 100; i++ {
-			if _, e := s.CreatePublished(ctx, author, fmt.Sprintf("pool %03d", i), "audit", "/a.mp4", "/a.png", nil, nil, nil, nil, ""); e != nil {
-				t.Fatal(e)
-			}
-		}
-		fixed := time.Now()
-		rs := ar.New(ir.New(gd), ar.WithNow(func() time.Time { return fixed }))
-		cursor := ""
-		seen := map[int64]bool{}
-		var total int
-		_ = db.QueryRow("SELECT COUNT(*) FROM video WHERE status=2").Scan(&total)
-		for page := 0; page < 30; page++ {
-			r, e := rs.Recommend(ctx, ar.CandidateRequest{UserID: author, Scene: "recommend", Limit: 10, Cursor: cursor})
-			if e != nil {
-				t.Fatal(e)
-			}
-			for _, c := range r.Candidates {
-				seen[c.VideoID] = true
-			}
-			if !r.HasMore {
-				break
-			}
-			cursor = r.NextCursor
-		}
-		if len(seen) != total {
-			t.Errorf("fixed pool cuts off later recommendation pages: seen=%d published=%d", len(seen), total)
-		}
+		checkLiveRecommendationSession(t, g, gd, rdb, author, atok, cfg.Internal.Token)
 	})
 	t.Run("14_out_of_order_action_events_keep_latest_state", func(t *testing.T) {
 		r, e := av.New(iv.New(gd)).CreatePublished(ctx, author, "order audit", "audit", "/a.mp4", "/a.png", nil, nil, nil, nil, "")

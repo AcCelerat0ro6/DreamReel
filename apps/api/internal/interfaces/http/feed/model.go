@@ -38,6 +38,9 @@ type feedItemResponse struct {
 	Favorited       bool      `json:"favorited"`
 	PublishedAt     time.Time `json:"published_at"`
 	ModelName       *string   `json:"model_name,omitempty"`
+	ModelParams     *string   `json:"model_params,omitempty"`
+	AIStyleTag      *string   `json:"ai_style_tag,omitempty"`
+	OriginVideoID   *int64    `json:"origin_video_id,omitempty"`
 }
 
 // TurnApplicationResultIntoResponse 把应用层 Feed 结果转换为 HTTP 响应结构。
@@ -60,6 +63,9 @@ func TurnApplicationResultIntoResponse(result *applicationfeed.FeedResult) *feed
 			Favorited:       item.Favorited,
 			PublishedAt:     item.PublishedAt,
 			ModelName:       item.ModelName,
+			ModelParams:     item.ModelParams,
+			AIStyleTag:      item.AIStyleTag,
+			OriginVideoID:   item.OriginVideoID,
 		})
 	}
 	return &feedItemsResponse{

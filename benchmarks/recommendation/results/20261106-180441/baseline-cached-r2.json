@@ -1,0 +1,308 @@
+﻿{
+    "root_group":  {
+                       "checks":  [
+                                      {
+                                          "fails":  0,
+                                          "name":  "HTTP 200 and 10 videos",
+                                          "path":  "::HTTP 200 and 10 videos",
+                                          "id":  "5312d7b26b99ca3147e5031d94f3d7b8",
+                                          "passes":  2001
+                                      }
+                                  ],
+                       "name":  "",
+                       "path":  "",
+                       "id":  "d41d8cd98f00b204e9800998ecf8427e",
+                       "groups":  [
+
+                                  ]
+                   },
+    "options":  {
+                    "noColor":  true,
+                    "summaryTrendStats":  [
+                                              "avg",
+                                              "med",
+                                              "p(90)",
+                                              "p(95)",
+                                              "p(99)",
+                                              "min",
+                                              "max"
+                                          ],
+                    "summaryTimeUnit":  ""
+                },
+    "state":  {
+                  "isStdOutTTY":  false,
+                  "isStdErrTTY":  false,
+                  "testRunDurationMs":  26056.2805
+              },
+    "metrics":  {
+                    "http_reqs":  {
+                                      "contains":  "default",
+                                      "values":  {
+                                                     "count":  2125,
+                                                     "rate":  81.55423411257796
+                                                 },
+                                      "type":  "counter"
+                                  },
+                    "http_req_tls_handshaking":  {
+                                                     "type":  "trend",
+                                                     "contains":  "time",
+                                                     "values":  {
+                                                                    "p(90)":  0,
+                                                                    "p(95)":  0,
+                                                                    "p(99)":  0,
+                                                                    "min":  0,
+                                                                    "max":  0,
+                                                                    "avg":  0,
+                                                                    "med":  0
+                                                                }
+                                                 },
+                    "vus_max":  {
+                                    "type":  "gauge",
+                                    "contains":  "default",
+                                    "values":  {
+                                                   "min":  30,
+                                                   "max":  30,
+                                                   "value":  30
+                                               }
+                                },
+                    "http_req_waiting":  {
+                                             "type":  "trend",
+                                             "contains":  "time",
+                                             "values":  {
+                                                            "max":  82.8912,
+                                                            "avg":  59.42759237647069,
+                                                            "med":  60.49,
+                                                            "p(90)":  66.82564,
+                                                            "p(95)":  68.94708,
+                                                            "p(99)":  73.42947199999999,
+                                                            "min":  0
+                                                        }
+                                         },
+                    "vus":  {
+                                "contains":  "default",
+                                "values":  {
+                                               "max":  7,
+                                               "value":  6,
+                                               "min":  0
+                                           },
+                                "type":  "gauge"
+                            },
+                    "http_req_connecting":  {
+                                                "type":  "trend",
+                                                "contains":  "time",
+                                                "values":  {
+                                                               "avg":  0.013729694117647058,
+                                                               "med":  0,
+                                                               "p(90)":  0,
+                                                               "p(95)":  0,
+                                                               "p(99)":  0.6022559999999963,
+                                                               "min":  0,
+                                                               "max":  2.097
+                                                           }
+                                            },
+                    "data_sent":  {
+                                      "contains":  "data",
+                                      "values":  {
+                                                     "count":  1195080,
+                                                     "rate":  45865.333695651614
+                                                 },
+                                      "type":  "counter"
+                                  },
+                    "data_received":  {
+                                          "type":  "counter",
+                                          "contains":  "data",
+                                          "values":  {
+                                                         "count":  8159361,
+                                                         "rate":  313143.73515437095
+                                                     }
+                                      },
+                    "iteration_duration":  {
+                                               "contains":  "time",
+                                               "values":  {
+                                                              "max":  83.4408,
+                                                              "avg":  60.612369965017415,
+                                                              "med":  61.2315,
+                                                              "p(90)":  67.434,
+                                                              "p(95)":  69.5136,
+                                                              "p(99)":  73.9563,
+                                                              "min":  44.7132
+                                                          },
+                                               "type":  "trend"
+                                           },
+                    "http_req_sending":  {
+                                             "contains":  "time",
+                                             "values":  {
+                                                            "max":  0.7174,
+                                                            "avg":  0.0024707764705882355,
+                                                            "med":  0,
+                                                            "p(90)":  0,
+                                                            "p(95)":  0,
+                                                            "p(99)":  0,
+                                                            "min":  0
+                                                        },
+                                             "type":  "trend"
+                                         },
+                    "valid_page":  {
+                                       "type":  "rate",
+                                       "contains":  "default",
+                                       "values":  {
+                                                      "fails":  0,
+                                                      "rate":  1,
+                                                      "passes":  2001
+                                                  },
+                                       "thresholds":  {
+                                                          "rate==1":  {
+                                                                          "ok":  true
+                                                                      }
+                                                      }
+                                   },
+                    "http_req_receiving":  {
+                                               "type":  "trend",
+                                               "contains":  "time",
+                                               "values":  {
+                                                              "avg":  0.059267341176470555,
+                                                              "med":  0,
+                                                              "p(90)":  0.5135400000000001,
+                                                              "p(95)":  0.5406,
+                                                              "p(99)":  0.6359959999999995,
+                                                              "min":  0,
+                                                              "max":  1.0256
+                                                          }
+                                           },
+                    "recommendation_requests":  {
+                                                    "type":  "counter",
+                                                    "contains":  "default",
+                                                    "values":  {
+                                                                   "count":  2001,
+                                                                   "rate":  76.79530468671459
+                                                               }
+                                                },
+                    "returned_videos":  {
+                                            "type":  "counter",
+                                            "contains":  "default",
+                                            "values":  {
+                                                           "count":  20010,
+                                                           "rate":  767.9530468671459
+                                                       }
+                                        },
+                    "duplicate_videos":  {
+                                             "type":  "counter",
+                                             "contains":  "default",
+                                             "values":  {
+                                                            "count":  0,
+                                                            "rate":  0
+                                                        },
+                                             "thresholds":  {
+                                                                "count==0":  {
+                                                                                 "ok":  true
+                                                                             }
+                                                            }
+                                         },
+                    "http_req_failed":  {
+                                            "type":  "rate",
+                                            "contains":  "default",
+                                            "values":  {
+                                                           "rate":  0,
+                                                           "passes":  0,
+                                                           "fails":  2125
+                                                       }
+                                        },
+                    "http_req_duration":  {
+                                              "type":  "trend",
+                                              "contains":  "time",
+                                              "values":  {
+                                                             "avg":  59.489330494117766,
+                                                             "med":  60.589,
+                                                             "p(90)":  66.8622,
+                                                             "p(95)":  68.97785999999999,
+                                                             "p(99)":  73.42947199999999,
+                                                             "min":  0.5225,
+                                                             "max":  82.8912
+                                                         }
+                                          },
+                    "http_req_duration{expected_response:true}":  {
+                                                                      "type":  "trend",
+                                                                      "contains":  "time",
+                                                                      "values":  {
+                                                                                     "p(99)":  73.42947199999999,
+                                                                                     "min":  0.5225,
+                                                                                     "max":  82.8912,
+                                                                                     "avg":  59.489330494117766,
+                                                                                     "med":  60.589,
+                                                                                     "p(90)":  66.8622,
+                                                                                     "p(95)":  68.97785999999999
+                                                                                 }
+                                                                  },
+                    "checks":  {
+                                   "type":  "rate",
+                                   "contains":  "default",
+                                   "values":  {
+                                                  "rate":  1,
+                                                  "passes":  2001,
+                                                  "fails":  0
+                                              }
+                               },
+                    "iterations":  {
+                                       "type":  "counter",
+                                       "contains":  "default",
+                                       "values":  {
+                                                      "count":  2001,
+                                                      "rate":  76.79530468671459
+                                                  }
+                                   },
+                    "http_req_blocked":  {
+                                             "type":  "trend",
+                                             "contains":  "time",
+                                             "values":  {
+                                                            "p(90)":  0,
+                                                            "p(95)":  0,
+                                                            "p(99)":  1.0670879999999991,
+                                                            "min":  0,
+                                                            "max":  2.621,
+                                                            "avg":  0.016003294117647057,
+                                                            "med":  0
+                                                        }
+                                         },
+                    "recommendation_latency":  {
+                                                   "type":  "trend",
+                                                   "contains":  "time",
+                                                   "values":  {
+                                                                  "p(95)":  69.0491,
+                                                                  "p(99)":  73.4954,
+                                                                  "min":  44.7132,
+                                                                  "max":  82.8912,
+                                                                  "avg":  60.206813793103514,
+                                                                  "med":  60.8629,
+                                                                  "p(90)":  67.0366
+                                                              }
+                                               },
+                    "cached_page_latency":  {
+                                                "type":  "trend",
+                                                "contains":  "time",
+                                                "values":  {
+                                                               "p(90)":  67.0366,
+                                                               "p(95)":  69.0491,
+                                                               "p(99)":  73.4954,
+                                                               "min":  44.7132,
+                                                               "max":  82.8912,
+                                                               "avg":  60.206813793103514,
+                                                               "med":  60.8629
+                                                           }
+                                            }
+                },
+    "benchmark":  {
+                      "server":  {
+                                     "elapsed_seconds":  20.0544029,
+                                     "execs":  0,
+                                     "go_heap_bytes":  3208104,
+                                     "queries":  8027,
+                                     "redis_keys":  116
+                                 },
+                      "k6Version":  "installed k6",
+                      "startedAt":  "2026-11-06T10:09:08.493Z",
+                      "mode":  "cached",
+                      "base":  "http://127.0.0.1:18080",
+                      "duration":  "20s",
+                      "exit_code":  0
+                  }
+}

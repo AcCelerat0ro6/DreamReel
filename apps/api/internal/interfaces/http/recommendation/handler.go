@@ -150,6 +150,10 @@ func exposureDecisionsResponseFromResult(result *applicationrecommendation.Expos
 }
 
 func writeRecommendationError(c *gin.Context, err error) {
+	if errors.Is(err, domainrecommendation.ErrCursorExpired) {
+		c.JSON(http.StatusGone, gin.H{"error": domainrecommendation.ErrCursorExpired.Error()})
+		return
+	}
 	if isBadRequestError(err) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

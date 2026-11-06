@@ -1,0 +1,394 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"runtime"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	embedding "@MODULE@/internal/domain/embedding"
+	config "@MODULE@/internal/infra/config"
+	jwt "@MODULE@/internal/infra/jwt"
+	metrics "@MODULE@/internal/infra/metrics"
+	"@MODULE@/internal/infra/persistence/migration"
+	router "@MODULE@/internal/interfaces/http/router"
+	"github.com/gin-gonic/gin"
+	mysql "github.com/go-sql-driver/mysql"
+	"github.com/redis/go-redis/v9"
+	@ZAPIMPORT@
+	gm "gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+)
+
+type fixture struct {
+	ID        string            `json:"id"`
+	Databases map[string]string `json:"databases"`
+	RedisDB   map[string]int    `json:"redis_db"`
+	Videos    int               `json:"videos"`
+	Dimension int               `json:"dimension"`
+	SeedTime  time.Time         `json:"seed_time"`
+	Users     int               `json:"users"`
+}
+
+var queries, execs atomic.Uint64
+var benchmarkStart, benchmarkEnd atomic.Int64
+
+// countedConnector 在驱动层计数实际执行的语句，跳过驱动要求回退到预编译的调用。
+type countedConnector struct{ driver.Connector }
+
+func (c countedConnector) Connect(ctx context.Context) (driver.Conn, error) {
+	conn, err := c.Connector.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return countedConn{conn}, nil
+}
+
+type countedConn struct{ driver.Conn }
+
+func (c countedConn) Prepare(q string) (driver.Stmt, error) {
+	s, err := c.Conn.Prepare(q)
+	if err != nil {
+		return nil, err
+	}
+	return countedStmt{s}, nil
+}
+func (c countedConn) QueryContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
+	rows, err := c.Conn.(driver.QueryerContext).QueryContext(ctx, q, args)
+	if !errors.Is(err, driver.ErrSkip) {
+		queries.Add(1)
+	}
+	return rows, err
+}
+func (c countedConn) ExecContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
+	r, err := c.Conn.(driver.ExecerContext).ExecContext(ctx, q, args)
+	if !errors.Is(err, driver.ErrSkip) {
+		execs.Add(1)
+	}
+	return r, err
+}
+func (c countedConn) Ping(ctx context.Context) error { return c.Conn.(driver.Pinger).Ping(ctx) }
+
+type countedStmt struct{ driver.Stmt }
+
+func (s countedStmt) Query(args []driver.Value) (driver.Rows, error) {
+	queries.Add(1)
+	return s.Stmt.Query(args)
+}
+func (s countedStmt) Exec(args []driver.Value) (driver.Result, error) {
+	execs.Add(1)
+	return s.Stmt.Exec(args)
+}
+func (s countedStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	queries.Add(1)
+	return s.Stmt.(driver.StmtQueryContext).QueryContext(ctx, args)
+}
+func (s countedStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
+	execs.Add(1)
+	return s.Stmt.(driver.StmtExecContext).ExecContext(ctx, args)
+}
+
+func openDB(cfg *config.Config, name string, count bool) (*sql.DB, error) {
+	c := mysql.NewConfig()
+	c.User = cfg.Database.User
+	c.Passwd = cfg.Database.Password
+	c.Net = "tcp"
+	c.Addr = net.JoinHostPort(cfg.Database.Host, fmt.Sprint(cfg.Database.Port))
+	c.DBName = name
+	c.ParseTime = true
+	connector, err := mysql.NewConnector(c)
+	if err != nil {
+		return nil, err
+	}
+	var db *sql.DB
+	if count {
+		db = sql.OpenDB(countedConnector{connector})
+	} else {
+		db = sql.OpenDB(connector)
+	}
+	db.SetMaxOpenConns(50)
+	db.SetMaxIdleConns(10)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return db, db.PingContext(ctx)
+}
+func redisClient(cfg *config.Config, n int) *redis.Client {
+	return redis.NewClient(&redis.Options{Addr: cfg.Redis.Addr, Password: cfg.Redis.Password, DB: n})
+}
+
+func main() {
+	action := flag.String("action", "serve", "prepare / serve / cleanup")
+	configPath := flag.String("config", "", "应用配置文件")
+	fixturePath := flag.String("fixture", "", "隔离资源清单")
+	variant := flag.String("variant", "current", "baseline / current")
+	port := flag.Int("port", 18081, "本机端口")
+	count := flag.Int("videos", 10000, "种子视频数")
+	flag.Parse()
+	cfg, err := config.LoadConfig(*configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if *action == "describe" {
+        db, err := openDB(cfg, "", false)
+        if err != nil { log.Fatal(err) }
+        defer db.Close()
+        var version, platform, machine string
+        if err = db.QueryRow("SELECT VERSION(), @@version_compile_os, @@version_compile_machine").Scan(&version, &platform, &machine); err != nil { log.Fatal(err) }
+        client := redisClient(cfg, cfg.Redis.DB)
+        defer client.Close()
+        info, err := client.Info(context.Background(), "server").Result()
+        if err != nil { log.Fatal(err) }
+        metadata := map[string]string{"mysql_version":version,"mysql_platform":platform,"mysql_machine":machine}
+        for _, line := range strings.Split(info,"\n") {
+            if strings.HasPrefix(line,"redis_version:") || strings.HasPrefix(line,"os:") {
+                parts:=strings.SplitN(strings.TrimSpace(line),":",2)
+                metadata[parts[0]]=parts[1]
+            }
+        }
+        encoded,_:=json.MarshalIndent(metadata,"","  ")
+        fmt.Println(string(encoded))
+        return
+    }
+	logger.Default = logger.Default.LogMode(logger.Silent)
+	@ZAPINIT@
+	var f fixture
+	if *action == "prepare" {
+		f = fixture{ID: fmt.Sprint(time.Now().UnixNano()), Databases: map[string]string{}, RedisDB: map[string]int{}, Videos: *count, Dimension: 128, Users: 64, SeedTime: time.Now().UTC().Truncate(time.Hour)}
+		err = prepare(cfg, &f, *fixturePath)
+	} else {
+		raw, e := os.ReadFile(*fixturePath)
+		if e != nil {
+			log.Fatal(e)
+		}
+		if e = json.Unmarshal(raw, &f); e != nil {
+			log.Fatal(e)
+		}
+		if *action == "cleanup" {
+			err = cleanup(cfg, f)
+		} else {
+			err = serve(cfg, f, *variant, *port)
+		}
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+func save(path string, f fixture) error {
+	raw, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, raw, 0600)
+}
+
+func prepare(cfg *config.Config, f *fixture, path string) error {
+	admin, err := openDB(cfg, "", false)
+	if err != nil {
+		return err
+	}
+	defer admin.Close()
+	// 使用独立测试库和原先为空的 Redis DB，通过清单只回收本次资源。
+	for _, variant := range []string{"baseline", "current"} {
+		found := -1
+		for n := 15; n >= 1; n-- {
+			if n == cfg.Redis.DB || n == f.RedisDB["baseline"] {
+				continue
+			}
+			r := redisClient(cfg, n)
+			size, e := r.DBSize(context.Background()).Result()
+			if e == nil && size == 0 {
+				ok, e := r.SetNX(context.Background(), "dreamreel:k6:reservation", f.ID, time.Hour).Result()
+				if e == nil && ok {
+					found = n
+				}
+			}
+			_ = r.Close()
+			if found >= 0 {
+				break
+			}
+		}
+		if found < 0 {
+			return errors.New("需要两个空闲 Redis DB")
+		}
+		f.RedisDB[variant] = found
+		name := "dreamreel_k6_" + f.ID + "_" + variant
+		f.Databases[variant] = name
+		if err = save(path, *f); err != nil {
+			return err
+		}
+		if _, err = admin.Exec("CREATE DATABASE " + name + " CHARACTER SET utf8mb4"); err != nil {
+			return err
+		}
+		db, e := openDB(cfg, name, false)
+		if e != nil {
+			return e
+		}
+		gd, e := gorm.Open(gm.New(gm.Config{Conn: db}), &gorm.Config{})
+		if e != nil {
+			return e
+		}
+		if e = migration.AutoMigrate(gd); e != nil {
+			return e
+		}
+		if e = seed(db, *f); e != nil {
+			return e
+		}
+		_ = db.Close()
+	}
+	return save(path, *f)
+}
+func seed(db *sql.DB, f fixture) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	vectorizer := embedding.NewHashNgramVectorizer()
+	now := f.SeedTime
+	for i := 1; i <= f.Users; i++ {
+		if _, err = tx.Exec("INSERT INTO account(id,account,password,nickname,status,role,created_at,updated_at) VALUES(?,?,'benchmark-only',?,1,'user',?,?)", i, fmt.Sprintf("k6_%d", i), fmt.Sprintf("作者%d", i), now, now); err != nil {
+			return err
+		}
+		raw, _ := json.Marshal(vectorizer.Vectorize(fmt.Sprintf("视频推荐 人工智能 主题%d", i%12)))
+		if _, err = tx.Exec("INSERT INTO user_interest_profile(user_id,model,dimension,embedding_json,sample_count,last_event_id,created_at,updated_at) VALUES(?,'hash-ngram-v1',128,?,100,0,?,?)", i, string(raw), now, now); err != nil {
+			return err
+		}
+	}
+	for i := 1; i <= f.Videos; i++ {
+		title := fmt.Sprintf("视频推荐 人工智能 主题%d 作品%d", i%12, i)
+		published := now.Add(-time.Duration(i) * time.Second)
+		if _, err = tx.Exec("INSERT INTO video(id,author_id,title,description,media_url,cover_url,status,published_at,created_at,updated_at) VALUES(?,?,?,'k6 benchmark','/benchmark.mp4','/benchmark.jpg',2,?,?,?)", i, (i%f.Users)+1, title, published, now, now); err != nil {
+			return err
+		}
+		if _, err = tx.Exec("INSERT INTO video_stat(video_id,like_count,comment_count,favorite_count,created_at,updated_at) VALUES(?,?,?,?,?,?)", i, (f.Videos-i)%1000, i%100, i%50, now, now); err != nil {
+			return err
+		}
+		raw, _ := json.Marshal(vectorizer.Vectorize(title))
+		if _, err = tx.Exec("INSERT INTO video_embedding(video_id,model,dimension,embedding_json,text_hash,created_at,updated_at) VALUES(?,'hash-ngram-v1',128,?,'benchmark',?,?)", i, string(raw), now, now); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func serve(cfg *config.Config, f fixture, variant string, port int) error {
+	db, err := openDB(cfg, f.Databases[variant], true)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	cfg.Redis.DB = f.RedisDB[variant]
+	cfg.RabbitMQ.URL = ""
+	cfg.Internal.Token = "k6-local-" + f.ID
+	cfg.JWT.Secret = "k6-local-" + f.ID
+	cfg.JWT.AccessTTL = "1h"
+	rdb := redisClient(cfg, cfg.Redis.DB)
+	defer rdb.Close()
+	gin.SetMode(gin.ReleaseMode)
+	g := gin.New()
+	g.Use(gin.Recovery(), metrics.HTTPMiddleware())
+	@REGISTER@
+	manager, err := jwt.NewManager(cfg.JWT.Secret, cfg.JWT.AccessTTL)
+	if err != nil {
+		return err
+	}
+	tokens := make([]string, f.Users)
+	for i := range tokens {
+		tokens[i], err = manager.SignAccessToken(int64(i+1), "user")
+		if err != nil {
+			return err
+		}
+	}
+	g.GET("/__bench/info", func(c *gin.Context) {
+		c.JSON(200, gin.H{"tokens": tokens, "internal_token": cfg.Internal.Token, "variant": variant, "videos": f.Videos, "gomaxprocs": runtime.GOMAXPROCS(0)})
+	})
+	g.POST("/__bench/clear", func(c *gin.Context) {
+		for _, pattern := range []string{"rec:session:*", "video:*", "feed:*"} {
+			keys, err := rdb.Keys(c.Request.Context(), pattern).Result()
+			if err != nil {
+				c.AbortWithStatus(500)
+				return
+			}
+			if len(keys) > 0 {
+				if err = rdb.Del(c.Request.Context(), keys...).Err(); err != nil {
+					c.AbortWithStatus(500)
+					return
+				}
+			}
+		}
+		c.Status(204)
+	})
+	g.POST("/__bench/reset", func(c *gin.Context) {
+		queries.Store(0)
+		execs.Store(0)
+		benchmarkStart.Store(time.Now().UnixNano())
+		benchmarkEnd.Store(0)
+		c.Status(204)
+	})
+	g.POST("/__bench/finalize", func(c *gin.Context) { benchmarkEnd.Store(time.Now().UnixNano()); c.Status(204) })
+	g.GET("/__bench/stats", func(c *gin.Context) {
+		end := benchmarkEnd.Load()
+		if end == 0 {
+			end = time.Now().UnixNano()
+		}
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
+		size, _ := rdb.DBSize(c.Request.Context()).Result()
+		c.JSON(200, gin.H{"elapsed_seconds": float64(end-benchmarkStart.Load()) / 1e9, "queries": queries.Load(), "execs": execs.Load(), "go_heap_bytes": mem.HeapAlloc, "redis_keys": size})
+	})
+	log.Printf("%s ready at 127.0.0.1:%d", variant, port)
+	return (&http.Server{Addr: fmt.Sprintf("127.0.0.1:%d", port), Handler: g, ReadHeaderTimeout: 5 * time.Second}).ListenAndServe()
+}
+func cleanup(cfg *config.Config, f fixture) error {
+	admin, err := openDB(cfg, "", false)
+	if err != nil {
+		return err
+	}
+	defer admin.Close()
+	for variant, name := range f.Databases {
+		if name != "dreamreel_k6_"+f.ID+"_"+variant {
+			return errors.New("无效隔离数据库名称")
+		}
+		if _, err = admin.Exec("DROP DATABASE IF EXISTS " + name); err != nil {
+			return err
+		}
+	}
+	for _, n := range f.RedisDB {
+		if n == cfg.Redis.DB {
+			return errors.New("拒绝清理业务 Redis DB")
+		}
+		r := redisClient(cfg, n)
+		owner, err := r.Get(context.Background(), "dreamreel:k6:reservation").Result()
+		if err != nil || owner != f.ID {
+			return errors.New("Redis 测试资源归属校验失败")
+		}
+		keys, err := r.Keys(context.Background(), "*").Result()
+		if err != nil {
+			return err
+		}
+		for _, key := range keys {
+			if !strings.HasPrefix(key, "rec:session:") && !strings.HasPrefix(key, "feed:") && !strings.HasPrefix(key, "video:") && key != "dreamreel:k6:reservation" {
+				return fmt.Errorf("Redis 含非测试键 %q", key)
+			}
+		}
+		if len(keys) > 0 {
+			if err = r.Del(context.Background(), keys...).Err(); err != nil {
+				return err
+			}
+		}
+		_ = r.Close()
+	}
+	return nil
+}

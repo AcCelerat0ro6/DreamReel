@@ -1,0 +1,38 @@
+{
+  "k6": "k6.exe v2.2.0 (commit/00a9a1b7f5, go1.26.5, windows/amd64)",
+  "go": "go version go1.26.2 windows/amd64",
+  "processor": [
+    {
+      "Name": "AMD Ryzen 7 5800H with Radeon Graphics         ",
+      "NumberOfCores": 8,
+      "NumberOfLogicalProcessors": 16
+    }
+  ],
+  "memory": [
+    {
+      "TotalVisibleMemorySize": 14528572
+    }
+  ],
+  "baselineHead": "8cf995cfa03985c335594c453ea050df5c0f1b6a",
+  "currentHead": "1cfc6fdf9f0df72ad934ace15db8b927f6064cd4",
+  "gomaxprocs": 4,
+  "databasePool": {
+    "maxIdle": 10,
+    "maxOpen": 50
+  },
+  "videos": 10000,
+  "users": 64,
+  "embeddingDimensions": 128,
+  "rounds": 3,
+  "duration": "20s",
+  "cachedArrivalRate": 100,
+  "firstArrivalRate": 50,
+  "scrollVUs": 20,
+  "services": {
+    "mysql_machine": "x86_64",
+    "mysql_platform": "Win64",
+    "mysql_version": "8.0.46",
+    "os": "Linux 6.18.54.1-microsoft-standard-WSL2 x86_64",
+    "redis_version": "8.0.5"
+  }
+}

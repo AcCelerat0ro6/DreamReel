@@ -1,0 +1,7 @@
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.npm-cache/
+apps/web/.env.local
+apps/web/.env.*.local
+.local/
+apps/api/uploads/

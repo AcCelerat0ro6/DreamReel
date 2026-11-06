@@ -1,0 +1,15 @@
+{
+  "id": "1793935895145522400",
+  "databases": {
+    "baseline": "dreamreel_k6_1793935895145522400_baseline",
+    "current": "dreamreel_k6_1793935895145522400_current"
+  },
+  "redis_db": {
+    "baseline": 15,
+    "current": 14
+  },
+  "videos": 10000,
+  "dimension": 128,
+  "seed_time": "2026-11-06T03:00:00Z",
+  "users": 64
+}

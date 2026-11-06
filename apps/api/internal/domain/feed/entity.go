@@ -52,7 +52,10 @@ type FeedItem struct {
 	HotScore        int
 	PublishedAt     time.Time
 	// AIGC 元数据
-	ModelName *string
+	ModelName     *string
+	ModelParams   *string
+	AIStyleTag    *string
+	OriginVideoID *int64
 }
 
 // FeedPageItem 代表一个视频的最小卡片数据，剩余的数据与缓存分开存储组装
@@ -92,6 +95,9 @@ type FeedCard struct {
 	CoverURL        string
 	PublishedAt     time.Time
 	ModelName       *string
+	ModelParams     *string
+	AIStyleTag      *string
+	OriginVideoID   *int64
 }
 
 // FeedStat 保存视频卡片中高频变更的字段

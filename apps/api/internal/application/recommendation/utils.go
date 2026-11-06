@@ -10,12 +10,7 @@ import (
 	"time"
 )
 
-const (
-	defaultLimit            = 10
-	candidatePoolMultiplier = 8
-	minCandidatePoolSize    = 50
-	maxCandidatePoolSize    = 500
-)
+const defaultLimit = 10
 
 func WithNow(now func() time.Time) Option {
 	return func(s *Service) {
@@ -39,23 +34,25 @@ func parseCursor(raw string) (*domainrecommendation.Cursor, error) {
 		}
 	}
 
-	var payload cursorPayload
-	if err := json.Unmarshal(content, &payload); err != nil {
+	var cursor domainrecommendation.Cursor
+	if err := json.Unmarshal(content, &cursor); err != nil {
 		return nil, domainrecommendation.ErrInvalidCursor
 	}
-	publishedAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(payload.PublishedAt))
-	if err != nil {
-		return nil, domainrecommendation.ErrInvalidCursor
-	}
-	cursor := &domainrecommendation.Cursor{
-		RankScore:   payload.RankScore,
-		PublishedAt: publishedAt,
-		VideoID:     payload.VideoID,
+	// 旧版本游标只记录排名分数，升级后由客户端刷新以建立新会话。
+	if cursor.SessionID == "" {
+		var legacy struct {
+			RankScore   *float64  `json:"rank_score"`
+			VideoID     int64     `json:"video_id"`
+			PublishedAt time.Time `json:"published_at"`
+		}
+		if json.Unmarshal(content, &legacy) == nil && legacy.RankScore != nil && legacy.VideoID > 0 && !legacy.PublishedAt.IsZero() {
+			return nil, domainrecommendation.ErrCursorExpired
+		}
 	}
 	if !cursor.Valid() {
 		return nil, domainrecommendation.ErrInvalidCursor
 	}
-	return cursor, nil
+	return &cursor, nil
 
 }
 
@@ -67,17 +64,6 @@ func normalizeLimit(limit int) int {
 		return domainrecommendation.MaxLimit
 	}
 	return limit
-}
-
-func candidatePoolLimit(limit int) int {
-	poolLimit := limit * candidatePoolMultiplier
-	if poolLimit < minCandidatePoolSize {
-		poolLimit = minCandidatePoolSize
-	}
-	if poolLimit > maxCandidatePoolSize {
-		poolLimit = maxCandidatePoolSize
-	}
-	return poolLimit
 }
 
 // freshnessScore 计算 视频新鲜度得分 区间为[0, 1]
@@ -137,78 +123,32 @@ func sortCandidates(candidates []*domainrecommendation.Candidate) {
 	})
 }
 
-func sameScore(left float64, right float64) bool {
-	return math.Abs(left-right) < 0.000000001
-}
-
-func filterByCursor(candidates []*domainrecommendation.Candidate, cursor *domainrecommendation.Cursor) []*domainrecommendation.Candidate {
-	if cursor == nil {
-		return candidates
-	}
-	filtered := make([]*domainrecommendation.Candidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		if candidate == nil {
-			continue
-		}
-		if candidate.RankScore < cursor.RankScore ||
-			(sameScore(candidate.RankScore, cursor.RankScore) && candidate.PublishedAt.Before(cursor.PublishedAt)) ||
-			(sameScore(candidate.RankScore, cursor.RankScore) && candidate.PublishedAt.Equal(cursor.PublishedAt) && candidate.VideoID < cursor.VideoID) {
-			filtered = append(filtered, candidate)
-		}
-	}
-	return filtered
-}
-
 func encodeCursor(cursor *domainrecommendation.Cursor) string {
 	if cursor == nil || !cursor.Valid() {
 		return ""
 	}
-	content, err := json.Marshal(cursorPayload{
-		RankScore:   cursor.RankScore,
-		PublishedAt: cursor.PublishedAt.UTC().Format(time.RFC3339Nano),
-		VideoID:     cursor.VideoID,
-	})
+	content, err := json.Marshal(cursor)
 	if err != nil {
 		return ""
 	}
 	return base64.RawURLEncoding.EncodeToString(content)
 }
 
-// interleaveByAuthor 对候选视频进行同作者打散
-func interleaveByAuthor(candidates []*domainrecommendation.Candidate) []*domainrecommendation.Candidate {
-	if len(candidates) <= 2 {
-		return candidates
+// interleaveByAuthor 在同一批候选中优先选择不同作者，补池时接续上一批的末位作者。
+func interleaveByAuthor(candidates []*domainrecommendation.Candidate, lastAuthor int64) []*domainrecommendation.Candidate {
+	result := make([]*domainrecommendation.Candidate, 0, len(candidates))
+	for len(candidates) > 0 {
+		index := 0
+		for index < len(candidates) && candidates[index].AuthorID == lastAuthor {
+			index++
+		}
+		if index == len(candidates) {
+			return append(result, candidates...)
+		}
+		next := candidates[index]
+		result = append(result, next)
+		lastAuthor = next.AuthorID
+		candidates = append(candidates[:index], candidates[index+1:]...)
 	}
-	output := make([]*domainrecommendation.Candidate, 0, len(candidates))
-	delayed := make([]*domainrecommendation.Candidate, 0)
-	var previousAuthorID int64
-	for _, candidate := range candidates {
-		if candidate == nil {
-			continue
-		}
-		if previousAuthorID != 0 && candidate.AuthorID == previousAuthorID {
-			delayed = append(delayed, candidate)
-			continue
-		}
-		output = append(output, candidate)
-		previousAuthorID = candidate.AuthorID
-	}
-	for len(delayed) > 0 {
-		progressed := false
-		remaining := make([]*domainrecommendation.Candidate, 0)
-		for _, candidate := range delayed {
-			if len(output) > 0 && output[len(output)-1].AuthorID == candidate.AuthorID {
-				remaining = append(remaining, candidate)
-				continue
-			}
-			output = append(output, candidate)
-			progressed = true
-		}
-		if !progressed {
-			output = append(output, remaining...)
-			break
-		}
-		delayed = remaining
-	}
-	return output
+	return result
 }

@@ -8,6 +8,7 @@ import (
 
 	applicationfeed "DreamReel/internal/application/feed"
 	domainfeed "DreamReel/internal/domain/feed"
+	domainrecommendation "DreamReel/internal/domain/recommendation"
 	httputils "DreamReel/internal/interfaces/http/utils"
 
 	"github.com/gin-gonic/gin"
@@ -96,10 +97,15 @@ func (h *Handler) Refresh(c *gin.Context) {
 func isBadRequestError(err error) bool {
 	return errors.Is(err, domainfeed.ErrInvalidLimit) ||
 		errors.Is(err, domainfeed.ErrInvalidCursor) ||
+		errors.Is(err, domainrecommendation.ErrInvalidCursor) ||
 		errors.Is(err, domainfeed.ErrUnsupportedScene)
 }
 
 func writeFeedError(c *gin.Context, err error) {
+	if errors.Is(err, domainrecommendation.ErrCursorExpired) {
+		c.JSON(http.StatusGone, gin.H{"error": domainrecommendation.ErrCursorExpired.Error()})
+		return
+	}
 	if errors.Is(err, domainfeed.ErrViewerRequired) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return

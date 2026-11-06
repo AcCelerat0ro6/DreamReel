@@ -16,13 +16,13 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func (r *Repository) ListCandidatePool(ctx context.Context, userID int64, limit int) ([]*domainrecommendation.Candidate, error) {
+func (r *Repository) ListCandidatePool(ctx context.Context, userID int64, excludeIDs []int64, limit int) ([]*domainrecommendation.Candidate, error) {
 	if limit <= 0 {
 		return []*domainrecommendation.Candidate{}, nil
 	}
 	var models []candidateModel
 
-	err := r.db.WithContext(ctx).
+	query := r.db.WithContext(ctx).
 		Table("video AS v").
 		Select("v.id AS video_id, v.author_id, ("+hotScoreExpression+") AS hot_score, v.published_at").
 		Joins("LEFT JOIN video_stat AS vs ON vs.video_id = v.id").
@@ -31,8 +31,12 @@ func (r *Repository) ListCandidatePool(ctx context.Context, userID int64, limit 
 			userID,
 			time.Now().Add(-domainrecommendation.RecentExposureWindow),
 		).
-		Where("v.status = ? AND v.published_at IS NOT NULL AND e.video_id IS NULL", domainvideo.StatusPublished).
-		Order("hot_score DESC").
+		Where("v.status = ? AND v.published_at IS NOT NULL AND e.video_id IS NULL", domainvideo.StatusPublished)
+	// 已入队但还未曝光的视频也要排除，避免补池时再次召回。
+	if len(excludeIDs) > 0 {
+		query = query.Where("v.id NOT IN ?", excludeIDs)
+	}
+	err := query.Order("hot_score DESC").
 		Order("v.published_at DESC").
 		Order("v.id DESC").
 		Limit(limit).
@@ -56,6 +60,20 @@ func (r *Repository) ListCandidatePool(ctx context.Context, userID int64, limit 
 		))
 	}
 	return candidates, nil
+}
+
+// PublishedVideoIDs 按当前发布状态批量校验会话中的候选。
+func (r *Repository) PublishedVideoIDs(ctx context.Context, ids []int64) (map[int64]bool, error) {
+	var visible []int64
+	err := r.db.WithContext(ctx).Table("video").Where("id IN ? AND status = ?", ids, domainvideo.StatusPublished).Pluck("id", &visible).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[int64]bool, len(visible))
+	for _, id := range visible {
+		result[id] = true
+	}
+	return result, nil
 }
 
 func (r *Repository) LoadVideoVectors(ctx context.Context, videoIDs []int64) (map[int64][]float64, error) {

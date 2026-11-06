@@ -15,16 +15,18 @@ var (
 )
 
 type Service struct {
-	repo domainrecommendation.Repository
-	now  func() time.Time
+	repo     domainrecommendation.Repository
+	sessions SessionStore
+	now      func() time.Time
 }
 
 type Option func(*Service)
 
 func New(repo domainrecommendation.Repository, options ...Option) *Service {
 	service := &Service{
-		repo: repo,
-		now:  func() time.Time { return time.Now().UTC().Truncate(time.Minute) },
+		repo:     repo,
+		sessions: newMemorySessionStore(),
+		now:      func() time.Time { return time.Now().UTC().Truncate(time.Minute) },
 	}
 	for _, option := range options {
 		option(service)
@@ -72,12 +74,6 @@ type ExposureDecisionResult struct {
 
 type ExposureResult struct {
 	Exposures []*domainrecommendation.Exposure
-}
-
-type cursorPayload struct {
-	RankScore   float64 `json:"rank_score"`
-	PublishedAt string  `json:"published_at"`
-	VideoID     int64   `json:"video_id"`
 }
 
 // RefreshProfileInput 定义观看事件驱动的用户推荐画像刷新入参。

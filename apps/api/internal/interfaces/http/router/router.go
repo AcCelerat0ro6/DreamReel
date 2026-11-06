@@ -106,6 +106,7 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 	videoRepo := infravideo.New(gormDB)
 	videoService := applicationvideo.New(videoRepo, videoOptions...)
 	videoHandler := interfacehttpvideo.New(videoService)
+	modelRankingHandler := interfacehttpvideo.NewRanking(applicationvideo.NewRanking(videoRepo))
 
 	// ============================================================
 	// 4. Message 域：站内消息中心
@@ -121,7 +122,11 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 	//    对外暴露 recommendationService 供 Feed 域作为 Recommender。
 	// ============================================================
 	recommendationRepo := infrarecommendation.New(gormDB)
-	recommendationService := applicationrecommendation.New(recommendationRepo)
+	var recommendationOptions []applicationrecommendation.Option
+	if rdb != nil {
+		recommendationOptions = append(recommendationOptions, applicationrecommendation.WithSessionStore(cache.NewRecommendationSessionStore(rdb)))
+	}
+	recommendationService := applicationrecommendation.New(recommendationRepo, recommendationOptions...)
 	recommendationHandler := interfaceshttprecommendation.New(recommendationService)
 
 	// ============================================================
@@ -221,6 +226,7 @@ func Register(g *gin.Engine, cfg *config.Config, db *sql.DB, rdb *redis.Client, 
 	// ============================================================
 
 	api := g.Group("/api")
+	api.GET("/model-rankings", modelRankingHandler.List)
 
 	// 会话资源用于登录态：创建会话表示登录，删除当前会话表示登出。
 	session := api.Group("/sessions")

@@ -216,5 +216,6 @@ func isBadRequestError(err error) bool {
 		errors.Is(err, domainvideo.ErrInvalidOffset) ||
 		errors.Is(err, domainvideo.ErrModelNameTooLong) ||
 		errors.Is(err, domainvideo.ErrModelParamsTooLong) ||
-		errors.Is(err, domainvideo.ErrAIStyleTagTooLong)
+		errors.Is(err, domainvideo.ErrAIStyleTagTooLong) ||
+		errors.Is(err, domainvideo.ErrInvalidOriginVideoID)
 }

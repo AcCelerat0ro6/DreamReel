@@ -1100,6 +1100,9 @@ func (r *memFeedRepo) BatchGetFeedCards(ctx context.Context, videoIDs []int64) (
 			CoverURL:        v.CoverURL,
 			PublishedAt:     *v.PublishedAt,
 			ModelName:       v.ModelName,
+			ModelParams:     v.ModelParams,
+			AIStyleTag:      v.AIStyleTag,
+			OriginVideoID:   v.OriginVideoID,
 		}
 	}
 	return cards, nil
@@ -1400,7 +1403,7 @@ func newMemRecommendationRepo(videoRepo *memVideoRepo) *memRecommendationRepo {
 	}
 }
 
-func (r *memRecommendationRepo) ListCandidatePool(_ context.Context, userID int64, limit int) ([]*domainrecommendation.Candidate, error) {
+func (r *memRecommendationRepo) ListCandidatePool(_ context.Context, userID int64, excludeIDs []int64, limit int) ([]*domainrecommendation.Candidate, error) {
 	r.videoRepo.mu.Lock()
 	var videos []*domainvideo.Video
 	for _, v := range r.videoRepo.videos {
@@ -1413,8 +1416,15 @@ func (r *memRecommendationRepo) ListCandidatePool(_ context.Context, userID int6
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	cutoff := time.Now().UTC().Add(-domainrecommendation.RecentExposureWindow)
+	excluded := make(map[int64]bool, len(excludeIDs))
+	for _, id := range excludeIDs {
+		excluded[id] = true
+	}
 	var out []*domainrecommendation.Candidate
 	for _, v := range videos {
+		if excluded[v.ID] {
+			continue
+		}
 		if exp := r.exposures[[2]int64{userID, v.ID}]; exp != nil && !exp.LastExposedAt.Before(cutoff) {
 			continue
 		}
@@ -1430,6 +1440,16 @@ func (r *memRecommendationRepo) ListCandidatePool(_ context.Context, userID int6
 		}
 	}
 	return out, nil
+}
+
+func (r *memRecommendationRepo) PublishedVideoIDs(ctx context.Context, ids []int64) (map[int64]bool, error) {
+	visible := make(map[int64]bool)
+	for _, id := range ids {
+		if _, err := r.videoRepo.FindByID(ctx, id); err == nil {
+			visible[id] = true
+		}
+	}
+	return visible, nil
 }
 
 func (r *memRecommendationRepo) LoadVideoVectors(_ context.Context, videoIDs []int64) (map[int64][]float64, error) {

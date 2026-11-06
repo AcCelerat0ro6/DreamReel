@@ -93,6 +93,9 @@ func NewPublished(authorID int64, title, description, mediaURL, coverURL string,
 	}
 
 	// AIGC 元数据归一化与长度校验（所有字段可选）
+	if originVideoID != nil && *originVideoID <= 0 {
+		return nil, ErrInvalidOriginVideoID
+	}
 	normalizedModelName, err := normalizeOptionalString(modelName, MaxModelNameLength, ErrModelNameTooLong)
 	if err != nil {
 		return nil, err

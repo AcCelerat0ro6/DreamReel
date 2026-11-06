@@ -1,6 +1,7 @@
 package domainrecommendation
 
 import (
+	"encoding/hex"
 	"math"
 	"strings"
 	"time"
@@ -32,14 +33,18 @@ type Candidate struct {
 	PublishedAt    time.Time
 }
 
+// Cursor 记录推荐会话以及下一页开始扫描的队列位置。
 type Cursor struct {
-	RankScore   float64
-	PublishedAt time.Time
-	VideoID     int64
+	SessionID string `json:"session_id"`
+	Offset    int    `json:"offset"`
 }
 
 func (c *Cursor) Valid() bool {
-	return c != nil && c.VideoID > 0 && !c.PublishedAt.IsZero() && !math.IsNaN(c.RankScore) && !math.IsInf(c.RankScore, 0)
+	if c == nil || len(c.SessionID) != 32 || c.Offset <= 0 || c.Offset > math.MaxInt-MaxLimit-1 {
+		return false
+	}
+	_, err := hex.DecodeString(c.SessionID)
+	return err == nil
 }
 
 type CandidateRequest struct {

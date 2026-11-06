@@ -303,23 +303,28 @@ sequenceDiagram
 
 涉及文件：
 - 接口层：`apps/api/internal/interfaces/http/recommendation/handler.go`、`model.go`
-- 应用层：`apps/api/internal/application/recommendation/service.go`、`model.go`、`utils.go`
+- 应用层：`apps/api/internal/application/recommendation/service.go`、`session.go`、`model.go`、`utils.go`
 - 领域层：`apps/api/internal/domain/recommendation/model.go`、`repository.go`
 - 持久化层：`apps/api/internal/infra/persistence/recommendation/gorm.go`
 
 ```mermaid
 flowchart TD
-    In["POST /internal/recommendation-candidates<br/>{user_id, scene, request_id, cursor, limit}"] --> Valid["校验 user_id>0, scene 非空(<=32), limit(默认10, <=100), 解析三元游标"]
-    Valid --> Pool["1. 粗排候选池召回 ListCandidatePool<br/>poolLimit = clamp(limit*8, 50, 500)<br/>过滤 status=StatusPublished(2) 且排除近 7 天已曝光视频<br/>按 hot_score DESC, published_at DESC, id DESC 初筛"]
-    Pool --> Vector["2. 批量特征加载<br/>- LoadVideoVectors: 批量读取候选视频 HashNgram 向量<br/>- LoadUserInterestVector: 读 30 天内 user_interest_profile 表；<br/>  缺失/过期则回退聚合最近 200 条正反馈观看行为实时计算"]
+    In["校验用户、场景、游标与页大小"] --> New{"首次请求？"}
+    New -->|是| Profile["固定评分时间与用户兴趣向量"]
+    Profile --> Pool["按热度、发布时间、ID 召回最多 200 条<br/>排除近期曝光及会话内已入队的视频"]
+    New -->|否| Read["按游标读取队列并校验用户和场景"]
+    Read -->|需要补池| Pool
+    Pool --> Vector["批量读取视频向量"]
     Vector --> Rank["3. 细粒度精排打分 rankCandidates<br/>- 新鲜度 freshness = 1 / (1 + hours/72)<br/>- 热度项 hot = ln(1 + max(hotScore,0)) / 10<br/>- 有画像: 0.70*CosineSim + 0.20*hot + 0.10*freshness<br/>- 冷启动: 0.65*hot + 0.35*freshness<br/>- 生成推荐理由: interest_match / hot / fresh"]
-    Rank --> CursorFilter["4. 游标过滤与分页截断<br/>按 (RankScore, PublishedAt, VideoID) 稳定降序过滤<br/>计算 hasMore 并基于排序末位生成 nextCursor"]
-    CursorFilter --> Interleave["5. 同作者打散 interleaveByAuthor<br/>延迟相邻同作者视频并二次穿插回填，避免刷屏"]
-    Interleave --> Out["200 OK: candidateResponse"]
+    Rank --> Append["接续上一批末位作者打散，按版本原子追加"]
+    Append --> Read
+    Read --> Page["批量检查发布状态，扫描至下一条可见候选或队尾"]
+    Page --> Out["返回 candidates、next_cursor 和 has_more"]
 ```
 
 **关键实现细节**：
-- **游标生成时机**：`nextCursor` 严格在 `interleaveByAuthor`（同作者打散）**之前**根据精排顺序的最后一条候选生成，确保下一页调用 `filterByCursor` 时分页边界在数学上严格单调无遗漏。
+- **会话分页**。空游标创建新会话。客户端原样回传 `next_cursor`，服务端按队列位置继续扫描。同一会话固定有效 15 分钟。过期或使用旧版排名游标时，接口返回 `410 {"error":"cursor_expired"}`，客户端清空游标刷新。跨用户或场景使用有效游标返回 400。
+- **补池与尾页**。预计返回本页后剩余候选少于 30 条时同步补池，已排好的位置保持稳定。跳过已下架或删除的视频后，如果还有下一条可见候选则返回其扫描位置。到达尾页时 `has_more=false` 且 `next_cursor` 为空。
 - **在线画像兜底**：当离线/异步画像表 `user_interest_profile` 尚无记录时，`LoadUserInterestVector` 会自动读取 `video_view_events` 中近 30 天的 `play`/`complete` 正反馈事件（甚至在 `video_embedding` 未落库时使用 `HashNgramVectorizer` 基于视频标题和描述即时向量化），按完播/观看时长加权聚合出实时兴趣向量。
 
 ---
@@ -429,7 +434,7 @@ flowchart TD
 | `/api/feed-queries` | `POST` | `NewOptionalJWTAuth` | 策略分发 + 复合游标分页 | `200 OK` | Redis 页/卡片/计数缓存 + MySQL 多表回源 |
 | `/api/users/me/following` | `GET` | `NewJWTAuth` | `(updated_at, target_user_id)` 游标分页 | `200 OK` | `user_follow`, `account` |
 | `/api/users/me/followers` | `GET` | `NewJWTAuth` | `(updated_at, user_id)` 游标分页 | `200 OK` | `user_follow`, `account` |
-| `/internal/recommendation-candidates` | `POST` | 内网隔离（无 Token 中间件） | `(rank_score, published_at, video_id)` 游标 | `200 OK` | `video`, `video_stat`, `exposures`, `video_embedding`, `user_interest_profile`, `video_view_events` |
+| `/internal/recommendation-candidates` | `POST` | 内网隔离（无 Token 中间件） | 会话 ID 与扫描位置游标 | `200 OK` | `video`, `video_stat`, `exposures`, `video_embedding`, `user_interest_profile`, `video_view_events` |
 | `/internal/exposure-decisions` | `POST` | 内网隔离（无 Token 中间件） | 7 天窗口批量去重查询 | `200 OK` | `exposures` |
 | `/internal/exposures` | `POST` | 内网隔离（无 Token 中间件） | 事务批量插入流水 + 聚合 Upsert | `201 Created` | `video`, `video_view_events`, `exposures` |
 | `/internal/messages` | `POST` | `NewInternalTokenAuth` | `uk_user_event` / `uk_user_idempotency` 幂等写入 | `201` / `200` | `user_message` |

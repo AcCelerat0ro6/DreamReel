@@ -7,7 +7,9 @@ import (
 
 type Repository interface {
 	// ListCandidatePool 粗粒度召回，筛选该用户当前有资格看到的一批候选视频原始池。
-	ListCandidatePool(ctx context.Context, userID int64, limit int) ([]*Candidate, error)
+	ListCandidatePool(ctx context.Context, userID int64, excludeIDs []int64, limit int) ([]*Candidate, error)
+	// PublishedVideoIDs 筛出仍可展示的候选，跳过入队后删除或下架的视频。
+	PublishedVideoIDs(ctx context.Context, ids []int64) (map[int64]bool, error)
 	// LoadVideoVectors 按批次取出视频的内容向量。
 	LoadVideoVectors(ctx context.Context, videoIDs []int64) (map[int64][]float64, error)
 	// LoadUserInterestVector 加载用户兴趣向量。

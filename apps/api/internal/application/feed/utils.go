@@ -307,6 +307,9 @@ func assembleFeedItems(ctx context.Context, repo domainfeed.Repository, cache Fe
 			stat.FavoriteCount,
 			publishedAt,
 		)
+		item.ModelParams = card.ModelParams
+		item.AIStyleTag = card.AIStyleTag
+		item.OriginVideoID = card.OriginVideoID
 		if action := viewerActions[item.VideoID]; action != nil {
 			item.Liked = action.Liked
 			item.Favorited = action.Favorited
