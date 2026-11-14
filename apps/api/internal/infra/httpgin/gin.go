@@ -3,6 +3,7 @@ package httpgin
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -32,7 +33,7 @@ func Init(mode string) *gin.Engine {
 // 关停顺序: 停止接受新连接 -> 在有限时间内等待在途请求完成 -> 返回。
 func Run(ctx context.Context, cfg *config.Config, g *gin.Engine) error {
 	srv := &http.Server{
-		Addr:              ":" + strconv.Itoa(cfg.Port),
+		Addr:              net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
 		Handler:           g,
 		ReadHeaderTimeout: 5 * time.Second,
 	}

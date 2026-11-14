@@ -152,6 +152,7 @@ func (s *Service) readSessionPage(ctx context.Context, req *domainrecommendation
 			continue
 		}
 		if len(batch) == 0 && pos < state.Count {
+			// 游标到期
 			return nil, domainrecommendation.ErrCursorExpired
 		}
 		ids := make([]int64, 0, len(batch))

@@ -2,6 +2,7 @@ package config
 
 // Config模型 保存基础配置。
 type Config struct {
+	Host     string         `yaml:"host"` // HTTP 监听地址；留空沿用 Go 默认，部署时使用 127.0.0.1
 	Port     int            `yaml:"port"`
 	Mode     string         `yaml:"mode"` // gin 运行模式: debug / release / test，留空则遵循 GIN_MODE 环境变量
 	JWT      JWTConfig      `yaml:"jwt"`

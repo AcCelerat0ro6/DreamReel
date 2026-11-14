@@ -1,0 +1,72 @@
+// Built unchanged against each source tree. Listen only on a private Unix socket.
+package main
+
+import (
+	"context"
+	"database/sql"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sync/atomic"
+
+	interaction "DreamReel/internal/application/interaction"
+	"DreamReel/internal/infra/config"
+	"DreamReel/internal/infra/mq"
+	repo "DreamReel/internal/infra/persistence/interaction"
+	"DreamReel/internal/interfaces/http/router"
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	gm "gorm.io/driver/mysql"
+	"gorm.io/gorm"
+)
+
+func must(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func main() {
+	dir, mode := os.Getenv("DREAMREEL_LAB_DIR"), os.Args[1]
+	database, err := sql.Open("mysql", "root@unix("+filepath.Join(dir, "mysql.sock")+")/bench?parseTime=true&interpolateParams=true")
+	must(err)
+	database.SetMaxOpenConns(32)
+	database.SetMaxIdleConns(16)
+	cfg := &config.Config{}
+	cfg.JWT.Secret, cfg.JWT.AccessTTL = os.Getenv("LAB_JWT"), "2h"
+	cfg.Internal.Token = cfg.JWT.Secret
+	var rdb *redis.Client
+	if mode != "sql" {
+		db := 0
+		if mode == "before" {
+			db = 1
+		}
+		rdb = redis.NewClient(&redis.Options{Network: "unix", Addr: filepath.Join(dir, "redis.sock"), DB: db})
+	}
+	var broker *mq.RabbitMQ
+	var consumed atomic.Int64
+	if mode == "async" {
+		broker, err = mq.NewRabbitMQ(config.RabbitMQConfig{URL: os.Getenv("LAB_AMQP")})
+		must(err)
+		db, err := gorm.Open(gm.New(gm.Config{Conn: database}), &gorm.Config{})
+		must(err)
+		worker := interaction.NewActionWorker(repo.New(db), broker)
+		must(broker.ConsumeActionChanged(context.Background(), func(ctx context.Context, event *interaction.ActionChangedEvent) error {
+			err := worker.HandleActionChanged(ctx, event)
+			if err == nil {
+				consumed.Add(1)
+			}
+			return err
+		}))
+	}
+	gin.SetMode(gin.ReleaseMode)
+	app := gin.New()
+	app.Use(gin.Recovery())
+	must(router.Register(app, cfg, database, rdb, broker))
+	app.GET("/__lab/consumed", func(c *gin.Context) { c.JSON(200, consumed.Load()) })
+	socket, err := net.Listen("unix", filepath.Join(dir, mode+".sock"))
+	must(err)
+	must(http.Serve(socket, app))
+}

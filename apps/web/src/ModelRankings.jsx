@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Icon from "./components/Icon";
 
 const sorts = [{ key: "hot", label: "综合热度" }, { key: "works", label: "作品数量" }, { key: "likes", label: "获赞数量" }];
 const number = (value) => Number(value || 0).toLocaleString("zh-CN");
@@ -23,25 +24,38 @@ export default function ModelRankings({ request, onNavigate }) {
     return () => { cancelled = true; };
   }, [request, sort, page, revision]);
 
+  const items = data?.items || [];
+  const totalWorks = items.reduce((sum, item) => sum + Number(item.video_count || 0), 0);
+  const totalInteractions = items.reduce((sum, item) => sum + Number(item.like_count || 0) + Number(item.comment_count || 0) + Number(item.favorite_count || 0), 0);
+
   return (
     <main className="model-rankings-page">
       <section className="ranking-header">
         <div>
-          <p className="eyebrow">AIGC · 创作观察</p>
-          <h1>模型榜单</h1>
+          <p className="eyebrow">THE MODEL INDEX</p>
+          <h1>每一种模型，都有无限可能。</h1>
           <p>从社区作品出发，发现正在被创作者使用的生成模型。</p>
         </div>
-        <button className="ghost-button compact" disabled={loading} onClick={() => setRevision((value) => value + 1)}>
-          <span className="material-symbols-outlined">refresh</span>刷新榜单
-        </button>
+        <span className="ranking-header-art" aria-hidden="true"><Icon name="auto_awesome" size={42} /></span>
       </section>
-      <div className="ranking-toolbar" role="group" aria-label="榜单排序">
-        {sorts.map((option) => (
-          <button key={option.key} aria-pressed={sort === option.key} className={sort === option.key ? "active" : ""}
-            onClick={() => { setSort(option.key); setPage(0); }}>{option.label}</button>
-        ))}
+      {!loading && !error && items.length > 0 && <>
+        <section className="ranking-overview" aria-label="本页数据概览">
+          <div><span><Icon name="auto_awesome" size={17} />本页上榜模型</span><strong>{number(items.length)}<small>个</small></strong></div>
+          <div><span><Icon name="movie" size={17} />本页模型累计作品</span><strong>{number(totalWorks)}<small>部</small></strong></div>
+          <div><span><Icon name="favorite" size={17} />本页模型累计互动</span><strong>{number(totalInteractions)}<small>次</small></strong></div>
+        </section>
+        <p className="ranking-overview-note">概览仅汇总当前第 {page + 1} 页的 {items.length} 个模型；互动包含点赞、评论与收藏。</p>
+      </>}
+      <div className="ranking-toolbar-row">
+        <div className="ranking-toolbar" role="group" aria-label="榜单排序">
+          {sorts.map((option) => (
+            <button key={option.key} aria-pressed={sort === option.key} className={sort === option.key ? "active" : ""}
+              onClick={() => { setSort(option.key); setPage(0); }}>{option.label}</button>
+          ))}
+        </div>
+        <button className="ghost-button compact" disabled={loading} onClick={() => setRevision((value) => value + 1)}><Icon name="refresh" size={15} />刷新榜单</button>
       </div>
-      <p className="ranking-note">累计统计已发布且填写模型名称的作品。热度 = 点赞 × 3 + 评论 × 5 + 收藏 × 4；这是社区创作榜单，不代表模型能力评测。互动数据会随统计更新。</p>
+      <p className="ranking-note">累计统计已发布且填写模型名称的作品。社区创作热度不代表模型能力评测。互动数据会随统计更新。</p>
       <section className="ranking-content" aria-label="模型排名" aria-busy={loading}>
         {loading ? <p className="ranking-state" role="status">正在加载模型榜单…</p> : error ? (
           <div className="ranking-state" role="alert"><p>{error}</p><button className="ghost-button compact" onClick={() => setRevision((value) => value + 1)}>重新加载</button></div>
@@ -55,7 +69,7 @@ export default function ModelRankings({ request, onNavigate }) {
               <tbody>{data.items.map((item) => (
                 <tr key={item.model_name}>
                   <td><span className={`ranking-position ${item.rank <= 3 ? "top" : ""}`}>{item.rank.toString().padStart(2, "0")}</span></td>
-                  <th scope="row">{item.model_name}</th>
+                  <th scope="row"><span className="ranking-model-name"><span className="ranking-model-mark" aria-hidden="true">{item.model_name.slice(0, 1).toUpperCase()}</span>{item.model_name}</span></th>
                   <td>{number(item.video_count)}</td><td>{number(item.like_count)}</td><td>{number(item.comment_count)}</td><td>{number(item.favorite_count)}</td>
                   <td className="ranking-score">{number(item.hot_score)}</td>
                 </tr>

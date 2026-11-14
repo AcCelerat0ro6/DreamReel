@@ -1,0 +1,36 @@
+.welcome-banner.creation-welcome { position: relative; height: 246px; margin-bottom: 24px; background: radial-gradient(ellipse at 65% 20%, #e5dcf7, #f5f0fc 70%); }
+.creation-welcome .welcome-copy { position: relative; z-index: 2; padding: 30px 35px; }
+.creation-welcome .welcome-copy h1 { margin: 13px 0 12px; font-size: 32px; }
+.creation-welcome .welcome-copy button { display: flex; align-items: center; gap: 10px; transition: background .2s, transform .2s; }
+.creation-welcome .welcome-copy button:hover { transform: translateY(-2px); }
+.creation-art { position: absolute; top: 0; right: 4%; display: grid; place-items: center; width: 38%; height: 100%; pointer-events: none; }
+.creation-frame { position: absolute; display: grid; place-items: center; width: 106px; height: 145px; border: 1px solid #fff8; border-radius: 17px; background: linear-gradient(145deg, #b59ce7, #9674cf); box-shadow: 0 20px 38px #8b6bbc2b; color: #fff; }
+.creation-frame-front { transform: rotate(-12deg); animation: creation-float 7s ease-in-out infinite; }
+.creation-frame-back { transform: translate(52px, -13px) rotate(14deg); background: linear-gradient(130deg, #e8dcfb, #bda7e1); opacity: .7; animation: creation-back-float 8s ease-in-out infinite; }
+.creation-orbit { position: absolute; width: 210px; height: 210px; border: 1px solid #c7b6e44f; border-radius: 50%; animation: creation-orbit 24s linear infinite; }
+.creation-orbit::after { content: ''; position: absolute; top: 8px; left: 55px; width: 6px; height: 6px; border-radius: 50%; background: #b9a2dc; }
+.creation-orbit-two { width: 270px; height: 270px; animation-direction: reverse; opacity: .6; }
+.creation-star { position: absolute; color: #ae92d0; font-size: 26px; animation: creation-twinkle 4s ease-in-out infinite; }
+.creation-star-one { top: 25px; left: 15%; } .creation-star-two { bottom: 23px; right: 14%; font-size: 18px; animation-delay: 2s; }
+.studio-form > .studio-section { animation: studio-section-in .4s ease-out both; }
+.studio-form > .studio-section:nth-child(2) { animation-delay: .07s; }
+.studio-form > .studio-section:nth-child(3) { animation-delay: .14s; }
+.studio-page .text-limit.is-over { color: #bd667e; }
+@keyframes creation-float { 50% { transform: translateY(-10px) rotate(-7deg); } }
+@keyframes creation-back-float { 50% { transform: translate(58px, -22px) rotate(18deg); } }
+@keyframes creation-orbit { to { transform: rotate(360deg); } }
+@keyframes creation-twinkle { 50% { opacity: .4; transform: scale(.8); } }
+@keyframes studio-section-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 1000px) { .creation-art { right: 0; width: 33%; opacity: .7; } .creation-frame { width: 82px; height: 114px; } }
+@media (max-width: 760px) {
+  .welcome-banner.creation-welcome { height: 210px; }
+  .creation-welcome .welcome-copy { padding: 24px 20px; }
+  .creation-welcome .welcome-copy h1 { font-size: 25px; }
+  .creation-welcome .welcome-copy p { max-width: 230px; }
+  .creation-art { right: -20px; width: 105px; opacity: .3; }
+  .creation-orbit { width: 150px; height: 150px; } .creation-orbit-two { width: 200px; height: 200px; }
+  .creation-frame { width: 64px; height: 90px; } .creation-frame-back { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .creation-welcome *, .creation-welcome *::after, .studio-form > .studio-section { animation: none !important; transition: none !important; } }
+
+@media (max-width: 760px) { .studio-page .studio-preview-column { display: none; } }

@@ -1,0 +1,9 @@
+SELECT id AS video_id,author_id,published_at FROM video WHERE status=2 AND published_at IS NOT NULL  ORDER BY published_at DESC,id DESC LIMIT 11 OFFSET 9000
+-> Limit/Offset: 11/9000 row(s)  (cost=1039 rows=11) (actual time=3.73..3.73 rows=11 loops=1)
+    -> Sort: video.published_at DESC, video.id DESC, limit input to 9011 row(s) per chunk  (cost=1039 rows=10145) (actual time=3.29..3.57 rows=9011 loops=1)
+        -> Filter: ((video.`status` = 2) and (video.published_at is not null))  (cost=1039 rows=10145) (actual time=0.0171..2.04 rows=10000 loops=1)
+            -> Table scan on video  (cost=1039 rows=10145) (actual time=0.0156..1.54 rows=10000 loops=1)
+
+SELECT id AS video_id,author_id,published_at FROM video WHERE status=2 AND published_at IS NOT NULL  AND (published_at<'2026-11-13 03:34:27.000' OR (published_at='2026-11-13 03:34:27.000' AND id<1001)) ORDER BY published_at DESC,id DESC LIMIT 11
+-> Limit: 11 row(s)  (cost=451 rows=11) (actual time=0.0373..0.0388 rows=11 loops=1)
+    -> Index range scan on video using idx_video_timeline over (status = 2 AND published_at = '2026-11-13 03:34:27.000' AND 1001 < id) OR (status = 2 AND '2026-11-13 03:34:27.000' < published_at < NULL), with index condition: ((video.`status` = 2) and (video.published_at is not null) and ((video.published_at < TIMESTAMP'2026-11-13 03:34:27') or ((video.published_at = TIMESTAMP'2026-11-13 03:34:27') and (video.id < 1001))))  (cost=451 rows=1001) (actual time=0.0369..0.0379 rows=11 loops=1)

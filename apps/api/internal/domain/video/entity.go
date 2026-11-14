@@ -3,6 +3,7 @@ package domainvideo
 import (
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -72,10 +73,10 @@ func NewPublished(authorID int64, title, description, mediaURL, coverURL string,
 	if title == "" {
 		return nil, ErrEmptyTitle
 	}
-	if len(title) > MaxTitleLength {
+	if utf8.RuneCountInString(title) > MaxTitleLength {
 		return nil, ErrTitleTooLong
 	}
-	if len(description) > MaxDescriptionLength {
+	if utf8.RuneCountInString(description) > MaxDescriptionLength {
 		return nil, ErrDescriptionTooLong
 	}
 	if mediaURL == "" {
@@ -92,7 +93,7 @@ func NewPublished(authorID int64, title, description, mediaURL, coverURL string,
 		idempotencyKeyPtr = nil
 	}
 
-	// AIGC 元数据归一化与长度校验（所有字段可选）
+	// AIGC 元数据按字符数校验，中文和英文各计一字（所有字段可选）。
 	if originVideoID != nil && *originVideoID <= 0 {
 		return nil, ErrInvalidOriginVideoID
 	}
@@ -136,7 +137,7 @@ func normalizeOptionalString(raw *string, maxLen int, tooLongErr error) (*string
 	if trimmed == "" {
 		return nil, nil
 	}
-	if len(trimmed) > maxLen {
+	if utf8.RuneCountInString(trimmed) > maxLen {
 		return nil, tooLongErr
 	}
 	return &trimmed, nil

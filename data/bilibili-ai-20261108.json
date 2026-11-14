@@ -1,0 +1,766 @@
+{
+  "batch": "bilibili-ai-20261108",
+  "authorization": "operator-confirmed-in-chat",
+  "videos": [
+    {
+      "bvid": "BV1FNxm6iEDp",
+      "title": "三年之期已到，恭迎世一上归位！【第16集】",
+      "source_url": "https://www.bilibili.com/video/BV1FNxm6iEDp/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1793726696,
+      "source_stats": {
+        "view": 1080542,
+        "like": 41189,
+        "favorite": 5299,
+        "reply": 4635,
+        "share": 9706
+      },
+      "duration": 431,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:42:51.330338+00:00"
+    },
+    {
+      "bvid": "BV1Nwso6vEpi",
+      "title": "三年之期已到，恭迎世一上归位！【第15集】",
+      "source_url": "https://www.bilibili.com/video/BV1Nwso6vEpi/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1793236091,
+      "source_stats": {
+        "view": 1981496,
+        "like": 58229,
+        "favorite": 6724,
+        "reply": 7327,
+        "share": 14575
+      },
+      "duration": 466,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:42:52.276768+00:00"
+    },
+    {
+      "bvid": "BV1pnn46KEdy",
+      "title": "三年之期已到，恭迎世一上归位！【第14集】",
+      "source_url": "https://www.bilibili.com/video/BV1pnn46KEdy/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1792730272,
+      "source_stats": {
+        "view": 1831319,
+        "like": 50290,
+        "favorite": 5844,
+        "reply": 5974,
+        "share": 14157
+      },
+      "duration": 444,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:42:53.235630+00:00"
+    },
+    {
+      "bvid": "BV12gpt6UER4",
+      "title": "三年之期已到，恭迎世一上归位！【第13集】",
+      "source_url": "https://www.bilibili.com/video/BV12gpt6UER4/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1791526897,
+      "source_stats": {
+        "view": 2284398,
+        "like": 64669,
+        "favorite": 7100,
+        "reply": 4248,
+        "share": 13489
+      },
+      "duration": 432,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:42:54.184990+00:00"
+    },
+    {
+      "bvid": "BV1NGa66uEHg",
+      "title": "三年之期已到，恭迎世一上归位！【第12集】",
+      "source_url": "https://www.bilibili.com/video/BV1NGa66uEHg/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1790868580,
+      "source_stats": {
+        "view": 2086979,
+        "like": 57314,
+        "favorite": 6077,
+        "reply": 3816,
+        "share": 10481
+      },
+      "duration": 441,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:42:55.147495+00:00"
+    },
+    {
+      "bvid": "BV14Dho6WE66",
+      "title": "三年之期已到，恭迎世一上归位！【第11集】",
+      "source_url": "https://www.bilibili.com/video/BV14Dho6WE66/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1790429711,
+      "source_stats": {
+        "view": 1490163,
+        "like": 61482,
+        "favorite": 6577,
+        "reply": 4354,
+        "share": 11740
+      },
+      "duration": 436,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:42:56.084096+00:00"
+    },
+    {
+      "bvid": "BV13KhB6rE7N",
+      "title": "三年之期已到，恭迎世一上归位！【第10集】",
+      "source_url": "https://www.bilibili.com/video/BV13KhB6rE7N/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1789996046,
+      "source_stats": {
+        "view": 2797897,
+        "like": 82545,
+        "favorite": 9280,
+        "reply": 7656,
+        "share": 19400
+      },
+      "duration": 447,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:42:57.106213+00:00"
+    },
+    {
+      "bvid": "BV1h4ec6VEs3",
+      "title": "三年之期已到，恭迎世一上归位！【第9集】",
+      "source_url": "https://www.bilibili.com/video/BV1h4ec6VEs3/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1789556447,
+      "source_stats": {
+        "view": 3103690,
+        "like": 69582,
+        "favorite": 8491,
+        "reply": 9205,
+        "share": 20782
+      },
+      "duration": 391,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:42:58.087644+00:00"
+    },
+    {
+      "bvid": "BV1CDYg69EGL",
+      "title": "三年之期已到，恭迎世一上归位！【第8集】",
+      "source_url": "https://www.bilibili.com/video/BV1CDYg69EGL/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1789060179,
+      "source_stats": {
+        "view": 3615954,
+        "like": 90606,
+        "favorite": 11796,
+        "reply": 9391,
+        "share": 23893
+      },
+      "duration": 474,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:42:59.082309+00:00"
+    },
+    {
+      "bvid": "BV1GAbW68EcH",
+      "title": "三年之期已到，恭迎世一上归位！【第7集】",
+      "source_url": "https://www.bilibili.com/video/BV1GAbW68EcH/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1788676939,
+      "source_stats": {
+        "view": 3072692,
+        "like": 73154,
+        "favorite": 9763,
+        "reply": 6011,
+        "share": 18734
+      },
+      "duration": 401,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:00.144127+00:00"
+    },
+    {
+      "bvid": "BV1eHt86mErz",
+      "title": "三年之期已到，恭迎世一上归位！【第6集】",
+      "source_url": "https://www.bilibili.com/video/BV1eHt86mErz/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1788177710,
+      "source_stats": {
+        "view": 4497399,
+        "like": 115118,
+        "favorite": 15680,
+        "reply": 7203,
+        "share": 34041
+      },
+      "duration": 386,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:01.106459+00:00"
+    },
+    {
+      "bvid": "BV1NA8d6CEm7",
+      "title": "三年之期已到，恭迎世一上归位！【第5集】",
+      "source_url": "https://www.bilibili.com/video/BV1NA8d6CEm7/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1787751683,
+      "source_stats": {
+        "view": 2425161,
+        "like": 63775,
+        "favorite": 8432,
+        "reply": 3697,
+        "share": 17047
+      },
+      "duration": 330,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:02.115863+00:00"
+    },
+    {
+      "bvid": "BV1VF8r6JEGM",
+      "title": "三年之期已到，恭迎世一上归位！【第4集】",
+      "source_url": "https://www.bilibili.com/video/BV1VF8r6JEGM/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1787332359,
+      "source_stats": {
+        "view": 1972996,
+        "like": 53307,
+        "favorite": 5482,
+        "reply": 2008,
+        "share": 9222
+      },
+      "duration": 278,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:03.283202+00:00"
+    },
+    {
+      "bvid": "BV1Y18u6tE3Y",
+      "title": "三年之期已到，恭迎世一上归位！【第3集】",
+      "source_url": "https://www.bilibili.com/video/BV1Y18u6tE3Y/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1787044377,
+      "source_stats": {
+        "view": 1927949,
+        "like": 40059,
+        "favorite": 4408,
+        "reply": 2146,
+        "share": 13363
+      },
+      "duration": 240,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:04.243439+00:00"
+    },
+    {
+      "bvid": "BV1DogW6mEiq",
+      "title": "三年之期已到，恭迎世一上归位！【第2集】",
+      "source_url": "https://www.bilibili.com/video/BV1DogW6mEiq/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1786634955,
+      "source_stats": {
+        "view": 2823367,
+        "like": 69370,
+        "favorite": 8648,
+        "reply": 2943,
+        "share": 31808
+      },
+      "duration": 228,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:05.199055+00:00"
+    },
+    {
+      "bvid": "BV1dvu36nEzG",
+      "title": "三年之期已到，恭迎世一上归位！",
+      "source_url": "https://www.bilibili.com/video/BV1dvu36nEzG/",
+      "source_author": "九夜听风",
+      "source_author_id": 593987248,
+      "source_published_at": 1786193017,
+      "source_stats": {
+        "view": 3837729,
+        "like": 98105,
+        "favorite": 14135,
+        "reply": 5243,
+        "share": 79596
+      },
+      "duration": 127,
+      "category": "电竞短剧",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:06.139016+00:00"
+    },
+    {
+      "bvid": "BV1ftJ86PE5Z",
+      "title": "雨夜贵宾犬的都市传说（一定要看到最后，有牛奶和红肠的彩蛋）",
+      "source_url": "https://www.bilibili.com/video/BV1ftJ86PE5Z/",
+      "source_author": "旧世界漫游者",
+      "source_author_id": 3690999605889520,
+      "source_published_at": 1792164567,
+      "source_stats": {
+        "view": 15748,
+        "like": 401,
+        "favorite": 91,
+        "reply": 36,
+        "share": 26
+      },
+      "duration": 61,
+      "category": "悬疑",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:07.170883+00:00"
+    },
+    {
+      "bvid": "BV1EvnJ6CECD",
+      "title": "好香啊开饭了开饭了",
+      "source_url": "https://www.bilibili.com/video/BV1EvnJ6CECD/",
+      "source_author": "冬冰",
+      "source_author_id": 44748304,
+      "source_published_at": 1792408230,
+      "source_stats": {
+        "view": 1274276,
+        "like": 67447,
+        "favorite": 17018,
+        "reply": 2068,
+        "share": 3100
+      },
+      "duration": 243,
+      "category": "治愈",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:08.066918+00:00"
+    },
+    {
+      "bvid": "BV19mJ16iEzk",
+      "title": "Deep小剧场：豆包也想变得受欢迎。",
+      "source_url": "https://www.bilibili.com/video/BV19mJ16iEzk/",
+      "source_author": "安如往昔_lm",
+      "source_author_id": 644596,
+      "source_published_at": 1792380600,
+      "source_stats": {
+        "view": 25858,
+        "like": 1549,
+        "favorite": 258,
+        "reply": 84,
+        "share": 26
+      },
+      "duration": 87,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:09.928567+00:00"
+    },
+    {
+      "bvid": "BV15B8z61EbV",
+      "title": "原创民俗AI短片《槐灯》【AI全民制作人】",
+      "source_url": "https://www.bilibili.com/video/BV15B8z61EbV/",
+      "source_author": "二白午",
+      "source_author_id": 3250699,
+      "source_published_at": 1787317308,
+      "source_stats": {
+        "view": 5668343,
+        "like": 455617,
+        "favorite": 241118,
+        "reply": 10969,
+        "share": 38969
+      },
+      "duration": 1098,
+      "category": "国风",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:11.154269+00:00"
+    },
+    {
+      "bvid": "BV1yXt16rEWJ",
+      "title": "AI短片EP02：一人成仙",
+      "source_url": "https://www.bilibili.com/video/BV1yXt16rEWJ/",
+      "source_author": "真的LBY",
+      "source_author_id": 389167275,
+      "source_published_at": 1788579291,
+      "source_stats": {
+        "view": 26119,
+        "like": 533,
+        "favorite": 411,
+        "reply": 110,
+        "share": 37
+      },
+      "duration": 812,
+      "category": "国风",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:12.036353+00:00"
+    },
+    {
+      "bvid": "BV1SobN66E5g",
+      "title": "【原创AI短片】《楼下》：最爱你，也有赶不到的时候",
+      "source_url": "https://www.bilibili.com/video/BV1SobN66E5g/",
+      "source_author": "Ai创作大叔",
+      "source_author_id": 1831630,
+      "source_published_at": 1788778459,
+      "source_stats": {
+        "view": 13749,
+        "like": 115,
+        "favorite": 7,
+        "reply": 2,
+        "share": 0
+      },
+      "duration": 155,
+      "category": "治愈",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:12.904377+00:00"
+    },
+    {
+      "bvid": "BV1n6AUzcENe",
+      "title": "B站首发，AI制作短片《困境》—【B站AI创作大赛-开放赛道】",
+      "source_url": "https://www.bilibili.com/video/BV1n6AUzcENe/",
+      "source_author": "不必知所云",
+      "source_author_id": 19271423,
+      "source_published_at": 1772183600,
+      "source_stats": {
+        "view": 243255,
+        "like": 18555,
+        "favorite": 5265,
+        "reply": 763,
+        "share": 3425
+      },
+      "duration": 442,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:13.722827+00:00"
+    },
+    {
+      "bvid": "BV1GCEx6yEDS",
+      "title": "原创AI短片《年少未得之物，是长大后的意难平》",
+      "source_url": "https://www.bilibili.com/video/BV1GCEx6yEDS/",
+      "source_author": "浪着的羊",
+      "source_author_id": 28627523,
+      "source_published_at": 1780822071,
+      "source_stats": {
+        "view": 1322811,
+        "like": 2340,
+        "favorite": 2345,
+        "reply": 5,
+        "share": 2
+      },
+      "duration": 170,
+      "category": "治愈",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:14.515418+00:00"
+    },
+    {
+      "bvid": "BV1sbEn6UEED",
+      "title": "原创AI短片《大傩》｜第10回  自诩英雄,安能青天",
+      "source_url": "https://www.bilibili.com/video/BV1sbEn6UEED/",
+      "source_author": "首帧动画",
+      "source_author_id": 3706952402077810,
+      "source_published_at": 1780747768,
+      "source_stats": {
+        "view": 55282,
+        "like": 2366,
+        "favorite": 596,
+        "reply": 94,
+        "share": 55
+      },
+      "duration": 293,
+      "category": "国风",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:15.334067+00:00"
+    },
+    {
+      "bvid": "BV1praT6gEWp",
+      "title": "AI原创非线性叙事短片《加加林》【AI全民制作人】",
+      "source_url": "https://www.bilibili.com/video/BV1praT6gEWp/",
+      "source_author": "AIGC控制局",
+      "source_author_id": 269817150,
+      "source_published_at": 1790265603,
+      "source_stats": {
+        "view": 13751,
+        "like": 1232,
+        "favorite": 676,
+        "reply": 91,
+        "share": 80
+      },
+      "duration": 649,
+      "category": "科幻",
+      "model_name": "LibTV",
+      "checked_at": "2026-11-08T02:43:16.151975+00:00"
+    },
+    {
+      "bvid": "BV1s5QwBGEsv",
+      "title": "你想定制一个AI孩子吗？",
+      "source_url": "https://www.bilibili.com/video/BV1s5QwBGEsv/",
+      "source_author": "妈妈再灭我一次",
+      "source_author_id": 513851725,
+      "source_published_at": 1775817132,
+      "source_stats": {
+        "view": 23380207,
+        "like": 86575,
+        "favorite": 80221,
+        "reply": 804,
+        "share": 503
+      },
+      "duration": 407,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:17.081168+00:00"
+    },
+    {
+      "bvid": "BV1Qho6BkEQQ",
+      "title": "《英魂归乡》",
+      "source_url": "https://www.bilibili.com/video/BV1Qho6BkEQQ/",
+      "source_author": "杨梅-大仙",
+      "source_author_id": 1254294604,
+      "source_published_at": 1777262214,
+      "source_stats": {
+        "view": 22654270,
+        "like": 542407,
+        "favorite": 192980,
+        "reply": 4156,
+        "share": 1770
+      },
+      "duration": 144,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:17.888440+00:00"
+    },
+    {
+      "bvid": "BV11mFLziEyP",
+      "title": "【牌子】当世界过分“诚实”，我们要如何保持好奇与勇气【B站AI创作大赛-开放赛道】",
+      "source_url": "https://www.bilibili.com/video/BV11mFLziEyP/",
+      "source_author": "DiDi_OK",
+      "source_author_id": 412615990,
+      "source_published_at": 1770121864,
+      "source_stats": {
+        "view": 21527439,
+        "like": 1500825,
+        "favorite": 716567,
+        "reply": 27193,
+        "share": 237407
+      },
+      "duration": 465,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:18.687937+00:00"
+    },
+    {
+      "bvid": "BV1RANn6bEAW",
+      "title": "【垃圾站】EP01 今天这车垃圾，有点不对劲【UP动画】",
+      "source_url": "https://www.bilibili.com/video/BV1RANn6bEAW/",
+      "source_author": "DiDi_OK",
+      "source_author_id": 412615990,
+      "source_published_at": 1783684800,
+      "source_stats": {
+        "view": 10986436,
+        "like": 366469,
+        "favorite": 117444,
+        "reply": 2965,
+        "share": 14412
+      },
+      "duration": 714,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:19.484394+00:00"
+    },
+    {
+      "bvid": "BV1iyVh6DE1B",
+      "title": "你想定制一个AI妈妈吗？",
+      "source_url": "https://www.bilibili.com/video/BV1iyVh6DE1B/",
+      "source_author": "妈妈再灭我一次",
+      "source_author_id": 513851725,
+      "source_published_at": 1780045200,
+      "source_stats": {
+        "view": 10950726,
+        "like": 25573,
+        "favorite": 21934,
+        "reply": 193,
+        "share": 152
+      },
+      "duration": 376,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:20.272433+00:00"
+    },
+    {
+      "bvid": "BV19iLv6bEKh",
+      "title": "【原创AI动画】当全世界所有人都永生不死【永生世界】",
+      "source_url": "https://www.bilibili.com/video/BV19iLv6bEKh/",
+      "source_author": "胡搞瞎搞MessAround",
+      "source_author_id": 80230166,
+      "source_published_at": 1779440400,
+      "source_stats": {
+        "view": 10708456,
+        "like": 342663,
+        "favorite": 157106,
+        "reply": 10691,
+        "share": 6701
+      },
+      "duration": 415,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:21.096476+00:00"
+    },
+    {
+      "bvid": "BV1yxr9B8EjY",
+      "title": "AI电影短片 | 暖惊悚 x 科幻人文《守夜人与摇篮曲》【B站AI创作大赛-开放赛道】",
+      "source_url": "https://www.bilibili.com/video/BV1yxr9B8EjY/",
+      "source_author": "疯四娘",
+      "source_author_id": 8600611,
+      "source_published_at": 1768675600,
+      "source_stats": {
+        "view": 10232097,
+        "like": 286436,
+        "favorite": 58615,
+        "reply": 4711,
+        "share": 5943
+      },
+      "duration": 472,
+      "category": "科幻",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:21.927989+00:00"
+    },
+    {
+      "bvid": "BV15MRKByEXk",
+      "title": "机器取代人工？或许人类拥有机器人永远替代不了的部分！五一致敬伟大的劳动人民！",
+      "source_url": "https://www.bilibili.com/video/BV15MRKByEXk/",
+      "source_author": "乔把你能的",
+      "source_author_id": 395205375,
+      "source_published_at": 1777607118,
+      "source_stats": {
+        "view": 10132785,
+        "like": 193216,
+        "favorite": 133099,
+        "reply": 4375,
+        "share": 520
+      },
+      "duration": 61,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:22.753226+00:00"
+    },
+    {
+      "bvid": "BV1RW27BXEL8",
+      "title": "【箭头】如果世界真的是程序，你会继续当个NPC吗",
+      "source_url": "https://www.bilibili.com/video/BV1RW27BXEL8/",
+      "source_author": "DiDi_OK",
+      "source_author_id": 412615990,
+      "source_published_at": 1764938101,
+      "source_stats": {
+        "view": 7868687,
+        "like": 517007,
+        "favorite": 198233,
+        "reply": 6726,
+        "share": 42596
+      },
+      "duration": 431,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:23.588521+00:00"
+    },
+    {
+      "bvid": "BV1YAQPBtELc",
+      "title": "最后的30分钟，你愿怎样度过？",
+      "source_url": "https://www.bilibili.com/video/BV1YAQPBtELc/",
+      "source_author": "自动鬼畜中的WZ",
+      "source_author_id": 16054375,
+      "source_published_at": 1775880000,
+      "source_stats": {
+        "view": 7275141,
+        "like": 322535,
+        "favorite": 61306,
+        "reply": 6150,
+        "share": 4452
+      },
+      "duration": 305,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:24.394633+00:00"
+    },
+    {
+      "bvid": "BV12mP9z9Ec1",
+      "title": "一人买下全世界，连呼吸都要收费！资本主义的终极形态有多疯狂？【B站AI创作大赛-开放赛道】",
+      "source_url": "https://www.bilibili.com/video/BV12mP9z9Ec1/",
+      "source_author": "自动鬼畜中的WZ",
+      "source_author_id": 16054375,
+      "source_published_at": 1773115200,
+      "source_stats": {
+        "view": 6377902,
+        "like": 325467,
+        "favorite": 89736,
+        "reply": 12244,
+        "share": 12628
+      },
+      "duration": 468,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:25.197206+00:00"
+    },
+    {
+      "bvid": "BV1a3th65EQb",
+      "title": "西西弗斯推的石头，居然是孙悟空......【AI全民制作人】#SpecialForAAIFF",
+      "source_url": "https://www.bilibili.com/video/BV1a3th65EQb/",
+      "source_author": "张拉灯",
+      "source_author_id": 38823497,
+      "source_published_at": 1788169368,
+      "source_stats": {
+        "view": 6363251,
+        "like": 353827,
+        "favorite": 105709,
+        "reply": 5179,
+        "share": 23015
+      },
+      "duration": 295,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:26.007430+00:00"
+    },
+    {
+      "bvid": "BV1LCaA6pEyi",
+      "title": "《雷霆一班的显眼包》【AI全民制作人】",
+      "source_url": "https://www.bilibili.com/video/BV1LCaA6pEyi/",
+      "source_author": "蜗牛AI动画",
+      "source_author_id": 3546785542834721,
+      "source_published_at": 1790236706,
+      "source_stats": {
+        "view": 6310598,
+        "like": 19416,
+        "favorite": 19446,
+        "reply": 161,
+        "share": 103
+      },
+      "duration": 603,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:26.911976+00:00"
+    },
+    {
+      "bvid": "BV1tNab65EaX",
+      "title": "我的家有4亿平方米之深海水管工【AI全民制作人】",
+      "source_url": "https://www.bilibili.com/video/BV1tNab65EaX/",
+      "source_author": "沈清雪和她家",
+      "source_author_id": 580014007,
+      "source_published_at": 1790564553,
+      "source_stats": {
+        "view": 6239026,
+        "like": 57346,
+        "favorite": 32136,
+        "reply": 558,
+        "share": 690
+      },
+      "duration": 369,
+      "category": "创意短片",
+      "model_name": "",
+      "checked_at": "2026-11-08T02:43:27.717862+00:00"
+    }
+  ]
+}

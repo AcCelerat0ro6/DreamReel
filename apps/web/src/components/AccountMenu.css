@@ -1,0 +1,7 @@
+.account-menu-wrap { position: relative; flex: 0 0 auto; }
+.account-menu { position: absolute; z-index: 80; top: calc(100% + 13px); right: 0; width: 184px; padding: 7px; border: 1px solid #ebe6f3; border-radius: 13px; background: #fff; box-shadow: 0 12px 40px #2b1a4926; animation: account-menu-in .16s ease-out; }
+.account-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 10px; border-radius: 8px; color: #5b526a; background: transparent; font-size: 12px; text-align: left; }
+.account-menu button:hover, .account-menu button:focus-visible { outline: none; background: #f4f0fc; color: #7560dc; }
+.account-menu .account-signout { color: #b75e77; }
+@keyframes account-menu-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .account-menu { animation: none; } }

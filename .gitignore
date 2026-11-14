@@ -4,4 +4,5 @@ apps/web/.npm-cache/
 apps/web/.env.local
 apps/web/.env.*.local
 .local/
+.runtime/
 apps/api/uploads/

@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AIGCMetadata from "./AIGCMetadata";
+import AppShell from "./components/AppShell";
+import VideoStage from "./components/VideoStage";
+import UploadPage from "./components/UploadPage";
+import LoginPage from "./components/LoginPage";
+import Icon from "./components/Icon";
+import { filterVideos, sharedVideoIndex, resolveSharedVideo } from "./discovery";
 import ModelRankings from "./ModelRankings";
-import { buildAIGCPayload } from "./aigc";
-import { createUploadManager, uploadWithProgress } from "./upload";
-import { createRecommendationState, fetchRecommendationBatch, createReplayBatch, FEED_BUFFER_LIMIT, FEED_HISTORY_LIMIT } from "./recommendationContinuation";
+import { fetchHotFeedPage } from "./hotFeed";
+import { createRecommendationState, fetchRecommendationBatch, createReplayBatch, FEED_BUFFER_LIMIT } from "./recommendationContinuation";
+import { appendFeedItems, feedTrimCount } from "./feedBuffer";
 
 const TOKEN_KEY = "dreamreel.accessToken";
 const USER_KEY = "dreamreel.user";
@@ -16,26 +22,13 @@ const DEFAULT_PLAYBACK_CONFIG = {
   buffer_ms: 1200
 };
 const FEED_SCENES = [
-  { key: "timeline", label: "最新视频", route: "/timeline", icon: "home" },
-  { key: "recommend", label: "推荐流", route: "/recommend", icon: "auto_awesome" },
-  { key: "following", label: "关注流", route: "/following", icon: "subscriptions" },
-  { key: "hot", label: "热门榜单", route: "/hotfeed", icon: "local_fire_department" }
+  { key: "timeline", label: "发现灵感", route: "/timeline", icon: "home" },
+  { key: "recommend", label: "为您推荐", route: "/recommend", icon: "auto_awesome" },
+  { key: "following", label: "我的关注", route: "/following", icon: "subscriptions" },
+  { key: "hot", label: "热门作品", route: "/hotfeed", icon: "local_fire_department" }
 ];
 
-const image = {
-  currentUser:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuAEH5ZNpPdQoO7Qiy3CGshEypK0dp1HFeVoZ1TAHDLhfcvYMg_js-k2rhBTIPpqMjs6GQpIgKMnUhIu0tY_QYUCTocPD70FDbGWYmHI25NPQ1Quod_7Ssaq0ICv7vvwNephDLNouriPhG7ubVy8GZKbFP9Qi-2yLe2mzST0t9Vfygo2jvgiHITh11LVRZ2ZTcE3nmySn6ZMnpqONtz0zbaKbQMLsDNfR-5smwYHCQLvdp6U5U2-OW_kZS1P6U9vR_PN9Ey84a1VDgRZ",
-  stage:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuBoRvSlHsGSK5JYfx8r7praM2C7qfaT8MA3oCiEBrp2qR1Ew_d_BBW1bayhxrA9QACs__BYjSfSKuyEvZcT0YtXO8fuXj8VQ2YLiuTimXER4hQXjdpWsSohnXC6O_Q_Ax3IYrf6kxn3pfnf3gbpdpHg6Z_gBGl-pwwh9QZ1MJMCDFNOgDIYu6YlIUcGa_f9muHACh25ulddKdk1mb9Ml2sMhagIzsTCt5xLaDwtQUM8HjhIkIrThVgRoRpajSVgMilICEgR6TB1uoLn",
-  vertical:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuAqJ-TzzKMaUW37h8FSVT6sySUyelD9iqAXQM8_V6Ynq8kYCFHFl-i5bCoymxVX4HRAhhWgD59axTWzgDp0cHyhyxghctwlas-jU5GyIstMv9SFzSLAx6tbBm85-yYz-578vmofewsYO3GeSOn7DOfZehI-h4AYI4TVeLPJp1t2qRfNFfYVTM6wFRmrN6KpTsUf-i1KDnFjGY0jsdTWvNSWT4ESDCXtOBQ9aWp9AzFdF4KNeN2DiNc5TqpFDECYEYYb8xODhOueWS1n",
-  creator:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuCIV1PKtZYRoVkb2NMSoMUWK2b4z4ud3anAMawRZcTvvO65A3fdP_VxZ-SKBjbFmKTXq8K4_5u7hDf1HFGvgAeGcRLain2KtgULNWhuvqWY6DarBw00-1b5W5FbUG65hymKyOYSaKWWhutXHzhRpe9P6PtNySTafG8eHDMWiY3Nd98DFbfRucptBxPPwEiuHqa25JIulogR7d149IxiPQBll9Cj5SbLwJJHMJwyYDdjLt6Xeb3SxzEo_wXQRoy_1ygtQV0BrhnwB-Gc",
-  elena:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuCfqKNkFePsMLBDZYqyGujFrw7aFgKuMbRmsfxl2RU6YwArmAMkd2WUVUnThLXS1IZ06GUZtBEwByaBo_gZorXeQZDI80CTTRv_UVwE8zOrSzQcYoPs610EFhylJndZzJdHfZ_baQVq05Jrr2nIs7XAaPX61Z2ztTTJW_J15FaeL8r-SltWdmFelv1138YY_ZzeCtPYBsTCVFSJ4jCOoKS346foSAxivJV0V-VKDfC87OD2aNJvmJUGF28t-s9gS2MaTUjbEeLcHAmt",
-  marcus:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuB7uaOE97IUWoZ4UATBaoSTyBJZUmaVDIznnBD7dhe-84PxZmlZ1V8lAgzaub9vACzqMryk0r96bzhbWPWr4VFjb6IQKxipytjB0_hO7yATBoAmjoMitTHcKYf-KgpXjA0_I4DP8Kym-JYSOhbsDxtiwXkZk1KHPGMerpuvZm24J8JkfExcRH-_8MFsLcGC6tkPin9XxwLp41Hu7yaTCJ6G2--rRM8JW2W9wtB0kXH3sn6754xv94qNtJNdCnyg7cpmz7tbIePycKd5"
-};
+const image = { currentUser: "/avatar.svg", creator: "/avatar.svg", stage: "/cover.svg", vertical: "/cover.svg", elena: "/avatar.svg", marcus: "/avatar.svg" };
 
 const emptyProfile = {
   id: 0,
@@ -52,9 +45,12 @@ function App() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || "");
   const [user, setUser] = useState(() => readStoredUser());
   const [unreadCount, setUnreadCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const onNavigate = useCallback((path) => { setSearchQuery(""); setEditingProfile(false); navigate(path, setRoute); }, []);
 
   useEffect(() => {
-    const handlePopState = () => setRoute(normalizeRoute(window.location.pathname));
+    const handlePopState = () => { setEditingProfile(false); setRoute(normalizeRoute(window.location.pathname)); };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
@@ -118,291 +114,20 @@ function App() {
     [token, user]
   );
 
-  if (route === "/auth" || route === "/login") {
-    return <LoginPage session={session} onNavigate={(path) => navigate(path, setRoute)} />;
-  }
-
-  if (route === "/profile" || route === "/me") {
-    return (
-      <AppShell
-        user={user}
-        route={route}
-        authenticated={Boolean(token && user)}
-        unreadCount={unreadCount}
-        onNavigate={(path) => navigate(path, setRoute)}
-        onLogout={() => logout(session, setRoute)}
-      >
-        <ProfilePage session={session} onNavigate={(path) => navigate(path, setRoute)} />
-      </AppShell>
-    );
-  }
-
+  if (route === "/auth" || route === "/login") return <LoginPage session={session} onNavigate={onNavigate} request={apiRequest}/>;
   const publicUserID = publicUserIDFromRoute(route);
-  if (publicUserID > 0) {
-    return (
-      <AppShell
-        user={user}
-        route={route}
-        authenticated={Boolean(token && user)}
-        unreadCount={unreadCount}
-        onNavigate={(path) => navigate(path, setRoute)}
-        onLogout={() => logout(session, setRoute)}
-      >
-        <PublicProfilePage userID={publicUserID} onNavigate={(path) => navigate(path, setRoute)} />
-      </AppShell>
-    );
-  }
-
-  if (route === "/upload") {
-    return (
-      <AppShell
-        user={user}
-        route={route}
-        authenticated={Boolean(token && user)}
-        unreadCount={unreadCount}
-        onNavigate={(path) => navigate(path, setRoute)}
-        onLogout={() => logout(session, setRoute)}
-      >
-        <UploadPage session={session} onNavigate={(path) => navigate(path, setRoute)} />
-      </AppShell>
-    );
-  }
-
-  if (route === "/messages") {
-    return (
-      <AppShell
-        user={user}
-        route={route}
-        authenticated={Boolean(token && user)}
-        unreadCount={unreadCount}
-        onNavigate={(path) => navigate(path, setRoute)}
-        onLogout={() => logout(session, setRoute)}
-      >
-        <MessagesPage session={session} onNavigate={(path) => navigate(path, setRoute)} onUnreadChange={refreshUnreadCount} />
-      </AppShell>
-    );
-  }
-
-  return (
-    <AppShell
-      user={user}
-      route={route}
-      authenticated={Boolean(token && user)}
-      unreadCount={unreadCount}
-      onNavigate={(path) => navigate(path, setRoute)}
-      onLogout={() => logout(session, setRoute)}
-    >
-      {route === "/models" ? (
-        <ModelRankings request={apiRequest} onNavigate={(path) => navigate(path, setRoute)} />
-      ) : (
-        <FeedPage feedScene={feedSceneFromRoute(route)} session={session} onNavigate={(path) => navigate(path, setRoute)} />
-      )}
-    </AppShell>
-  );
+  let page;
+  if (route === "/profile" || route === "/me") page = <ProfilePage session={session} onNavigate={onNavigate} editing={editingProfile} setEditing={setEditingProfile}/>;
+  else if (publicUserID > 0) page = <PublicProfilePage userID={publicUserID} onNavigate={onNavigate}/>;
+  else if (route === "/create" || route === "/upload") page = <UploadPage session={session} onNavigate={onNavigate} request={apiRequest}/>;
+  else if (route === "/messages") page = <MessagesPage session={session} onNavigate={onNavigate} onUnreadChange={refreshUnreadCount}/>;
+  else if (route === "/models") page = <ModelRankings request={apiRequest} onNavigate={onNavigate}/>;
+  else page = <FeedPage feedScene={feedSceneFromRoute(route)} session={session} onNavigate={onNavigate} query={searchQuery} onClearSearch={() => setSearchQuery("")}/>;
+  return <AppShell user={user} route={route} authenticated={Boolean(token && user)} unreadCount={unreadCount} onNavigate={onNavigate} onLogout={() => { setEditingProfile(false); logout(session, setRoute); }} onEditProfile={() => setEditingProfile(true)} searchValue={searchQuery} onSearch={value => { setSearchQuery(value); if (!["/timeline", "/recommend", "/following", "/hotfeed"].includes(route)) navigate("/timeline", setRoute); }}>{page}</AppShell>;
 }
 
-function LoginPage({ session, onNavigate }) {
-  const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ account: "", password: "", nickname: "" });
-  const [message, setMessage] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setSubmitting(true);
-    setMessage("");
-    try {
-      if (mode === "register") {
-        await apiRequest("/api/users", {
-          method: "POST",
-          body: {
-            account: form.account.trim(),
-            password: form.password,
-            nickname: form.nickname.trim()
-          }
-        });
-      }
-      const tokenResponse = await apiRequest("/api/sessions", {
-        method: "POST",
-        body: {
-          account: form.account.trim(),
-          password: form.password
-        }
-      });
-      const accessToken = tokenResponse.access_token;
-      const profile = await apiRequest("/api/users/me", { token: accessToken });
-      session.setAuth(accessToken, profile);
-      onNavigate("/recommend");
-    } catch (error) {
-      setMessage(error.message || "登录失败，请检查账号与密码");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <main className="auth-page">
-      <section className="auth-visual" aria-label="DreamReel">
-        <div className="auth-preview">
-          <img src={image.stage} alt="" />
-          <div className="auth-preview-card">
-            <span className="material-symbols-outlined">play_arrow</span>
-            <div>
-              <strong>DreamReel</strong>
-              <span>16:9 桌面 Feed</span>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section className="auth-panel">
-        <div className="auth-card">
-          <div className="brand-block">
-            <span className="brand-mark">DR</span>
-            <div>
-              <h1>登录 DreamReel</h1>
-              <p>连接后端账号、Feed 和个人资料。</p>
-            </div>
-          </div>
-
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <div className="auth-mode-tabs">
-              <button className={mode === "login" ? "active" : ""} type="button" onClick={() => setMode("login")}>
-                登录
-              </button>
-              <button className={mode === "register" ? "active" : ""} type="button" onClick={() => setMode("register")}>
-                注册
-              </button>
-            </div>
-            <label>
-              <span>账号</span>
-              <input
-                value={form.account}
-                onChange={(event) => setForm({ ...form, account: event.target.value })}
-                placeholder="请输入账号"
-                autoComplete="username"
-              />
-            </label>
-            {mode === "register" && (
-              <label>
-                <span>昵称</span>
-                <input
-                  value={form.nickname}
-                  onChange={(event) => setForm({ ...form, nickname: event.target.value })}
-                  placeholder="输入昵称"
-                  autoComplete="nickname"
-                />
-              </label>
-            )}
-            <label>
-              <span>密码</span>
-              <input
-                value={form.password}
-                onChange={(event) => setForm({ ...form, password: event.target.value })}
-                placeholder="输入密码"
-                type="password"
-                autoComplete="current-password"
-              />
-            </label>
-            {message && <p className="form-message">{message}</p>}
-            <button className="primary-button" disabled={submitting}>
-              <span className="material-symbols-outlined">login</span>
-              {submitting ? "提交中" : mode === "register" ? "注册并登录" : "登录"}
-            </button>
-          </form>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function AppShell({ children, user, route, authenticated, unreadCount, onNavigate, onLogout }) {
-  const displayUser = user || emptyProfile;
-  return (
-    <div className="app-shell">
-      <TopNav
-        user={displayUser}
-        authenticated={authenticated}
-        unreadCount={unreadCount}
-        onNavigate={onNavigate}
-        onLogout={onLogout}
-      />
-      <div className="app-body">
-        <aside className="sidebar">
-          {FEED_SCENES.map((scene) => (
-            <button
-              className={`sidebar-link ${route === scene.route ? "active" : ""}`}
-              key={scene.key}
-              aria-label={scene.label}
-              onClick={() => onNavigate(scene.route)}
-            >
-              <span className="material-symbols-outlined filled">{scene.icon}</span>
-              <span>{scene.label}</span>
-            </button>
-          ))}
-          <button className={`sidebar-link ${route === "/models" ? "active" : ""}`} aria-label="模型榜单" onClick={() => onNavigate("/models")}>
-            <span className="material-symbols-outlined filled">leaderboard</span>
-            <span>模型榜单</span>
-          </button>
-          <button className={`sidebar-link ${route === "/messages" ? "active" : ""}`} onClick={() => onNavigate(authenticated ? "/messages" : "/auth")}>
-            <span className="material-symbols-outlined filled">notifications</span>
-            <span>消息</span>
-            {authenticated && unreadCount > 0 && <span className="nav-badge">{formatBadgeCount(unreadCount)}</span>}
-          </button>
-        </aside>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function TopNav({ user, authenticated, unreadCount, onNavigate, onLogout }) {
-  return (
-    <header className="top-nav">
-      <div className="top-left">
-        <button className="wordmark" onClick={() => onNavigate(authenticated ? "/recommend" : "/timeline")}>
-          DreamReel
-        </button>
-      </div>
-      <div className="top-center">
-        <label className="search-box">
-          <span className="material-symbols-outlined">search</span>
-          <input placeholder="搜索" />
-        </label>
-      </div>
-      <div className="top-actions">
-        <button className="upload-button" onClick={() => onNavigate(authenticated ? "/upload" : "/auth")}>
-          <span className="material-symbols-outlined">upload</span>
-          发布
-        </button>
-        <button className="icon-button badge-button" aria-label="通知" onClick={() => onNavigate(authenticated ? "/messages" : "/auth")}>
-          <span className="material-symbols-outlined">notifications</span>
-          {authenticated && unreadCount > 0 && <span className="nav-badge floating">{formatBadgeCount(unreadCount)}</span>}
-        </button>
-        <button
-          className={`avatar-button ${authenticated ? "" : "guest"}`}
-          onClick={() => onNavigate(authenticated ? "/profile" : "/auth")}
-          aria-label={authenticated ? "个人资料" : "登录"}
-        >
-          {authenticated ? (
-            <img src={user.avatar_url || image.currentUser} alt="" />
-          ) : (
-            <>
-              <span className="material-symbols-outlined">person</span>
-              <span>登录</span>
-            </>
-          )}
-        </button>
-        {authenticated && (
-          <button className="icon-button" onClick={onLogout} aria-label="退出登录">
-            <span className="material-symbols-outlined">logout</span>
-          </button>
-        )}
-      </div>
-    </header>
-  );
-}
-
-function FeedPage({ feedScene, session, onNavigate }) {
+function FeedPage({ feedScene, session, onNavigate, query, onClearSearch }) {
+  const gridMode = Boolean(query.trim());
   const [items, setItems] = useState([]);
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState({});
@@ -416,6 +141,7 @@ function FeedPage({ feedScene, session, onNavigate }) {
   const [commentsError, setCommentsError] = useState("");
   const [commentText, setCommentText] = useState("");
   const [feedState, setFeedState] = useState("loading");
+  const [contentSource, setContentSource] = useState(feedScene);
   const [feedError, setFeedError] = useState("");
   const [nextCursor, setNextCursor] = useState("");
   const [hasMore, setHasMore] = useState(false);
@@ -430,6 +156,7 @@ function FeedPage({ feedScene, session, onNavigate }) {
   const swipeRef = useRef(null);
   const loadingMoreRef = useRef(false);
   const feedRequestIDRef = useRef("");
+  const pagingSourceRef = useRef(feedScene);
   const exposedRef = useRef(new Set());
   const preloadedVideoRef = useRef(new Set());
   const recommendationRef = useRef(createRecommendationState());
@@ -444,6 +171,8 @@ function FeedPage({ feedScene, session, onNavigate }) {
     continuationAbortRef.current?.abort();
     feedRequestIDRef.current = "";
     prefetchedEntryRef.current = "";
+    pagingSourceRef.current = feedScene;
+    setContentSource(feedScene);
     if (requiresAuthFeed(feedScene) && !session.token) {
       setSwipe(null);
       setItems([]);
@@ -482,21 +211,30 @@ function FeedPage({ feedScene, session, onNavigate }) {
           const progress = batch.state[batch.scene];
           return { items: batch.items, next_cursor: progress.cursor, has_more: progress.hasMore, source: batch.scene, requestID: batch.requestID, continuation: batch.state };
         })
-      : fetchFeedPage(feedScene, session.token, "", requestID, controller.signal);
+      : feedScene === "hot"
+        ? fetchHotFeedPage({
+            fetchPage: (scene, cursor) => fetchFeedPage(scene, session.token, cursor, requestID, controller.signal)
+          })
+        : fetchFeedPage(feedScene, session.token, "", requestID, controller.signal);
     initial
+      .then(data => resolveSharedVideo(data, window.location.search, apiRequest, controller.signal))
       .then((data) => {
         if (!live || feedRequestIDRef.current !== requestID) return;
         if (data.continuation) recommendationRef.current = data.continuation;
-        const nextItems = (data.items || []).map((item) => mapFeedItem(item, data.source || feedScene, data.requestID || requestID));
+        const actualSource = data.source || feedScene;
+        pagingSourceRef.current = actualSource;
+        setContentSource(actualSource);
+        const nextItems = (data.items || []).map((item) => mapFeedItem(item, actualSource, data.requestID || requestID));
         setSwipe(null);
         setItems(nextItems);
         setLiked(viewerActionMap(nextItems, "liked"));
         setFavorited(viewerActionMap(nextItems, "favorited"));
-        setIndex(0);
+        setIndex(Math.max(0, sharedVideoIndex(nextItems, window.location.search)));
         setCommentsOpen(false);
         setNextCursor(data.next_cursor || "");
         setHasMore(Boolean(data.has_more && data.next_cursor));
         setFeedState("ready");
+        if (data.shareError) setFeedError(data.shareError);
       })
       .catch((error) => {
         if (!live || feedRequestIDRef.current !== requestID) return;
@@ -577,10 +315,19 @@ function FeedPage({ feedScene, session, onNavigate }) {
     const requestID = feedRequestIDRef.current || feedRequestID || createFeedRequestID(feedScene);
     loadingMoreRef.current = true;
     setLoadingMore(true);
-    fetchFeedPage(feedScene, session.token, nextCursor, requestID)
-      .then((data) => {
+    const pending = feedScene === "hot"
+      ? fetchHotFeedPage({
+          fetchPage: (scene, cursor) => fetchFeedPage(scene, session.token, cursor, requestID),
+          cursor: nextCursor,
+          source: pagingSourceRef.current
+        })
+      : fetchFeedPage(feedScene, session.token, nextCursor, requestID);
+    pending.then((data) => {
         if (feedRequestIDRef.current !== requestID) return;
-        const nextItems = (data.items || []).map((item) => mapFeedItem(item, feedScene, requestID));
+        const actualSource = data.source || feedScene;
+        pagingSourceRef.current = actualSource;
+        setContentSource(actualSource);
+        const nextItems = (data.items || []).map((item) => mapFeedItem(item, actualSource, requestID));
         setItems((state) => appendFeedItems(state, nextItems));
         mergeViewerActions(nextItems, setLiked, "liked");
         mergeViewerActions(nextItems, setFavorited, "favorited");
@@ -674,8 +421,9 @@ function FeedPage({ feedScene, session, onNavigate }) {
   }, [continueRecommendation, feedScene, feedState, index, items, loadingMore, swipe]);
 
   useEffect(() => {
-    if (feedScene !== "recommend" || swipe || items.length <= FEED_BUFFER_LIMIT || index <= FEED_HISTORY_LIMIT) return;
-    const remove = Math.min(index - FEED_HISTORY_LIMIT, items.length - FEED_BUFFER_LIMIT);
+    if (feedScene !== "recommend" || swipe) return;
+    const remove = feedTrimCount(items.length, index);
+    if (!remove) return;
     const retained = new Set(items.slice(remove).map((item) => String(item.video_id)));
     // 回收较早的播放记录，保留当前视频及少量回看位置。
     setItems((state) => state.slice(remove));
@@ -702,8 +450,8 @@ function FeedPage({ feedScene, session, onNavigate }) {
     }
   }, [index, items.length, swipe]);
 
-  const current = items[index];
-  const visibleCurrent = swipe ? items[swipe.fromIndex] : current;
+  const current = gridMode ? undefined : items[index];
+  const visibleCurrent = gridMode ? undefined : swipe ? items[swipe.fromIndex] : current;
   const visibleNext = swipe ? items[swipe.toIndex] : null;
   const trackStyle = getFeedTrackStyle(swipe);
 
@@ -981,7 +729,7 @@ function FeedPage({ feedScene, session, onNavigate }) {
   }
 
   function handlePointerDown(event) {
-    if (event.button > 0 || swipe || items.length < 2 || isInteractiveTarget(event.target)) return;
+    if (event.button > 0 || swipe || items.length < 2 || isInteractiveTarget(event.target) || event.target?.closest?.('.dr-player-info')) return;
     dragRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
@@ -990,7 +738,7 @@ function FeedPage({ feedScene, session, onNavigate }) {
       direction: "",
       height: 0
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+
   }
 
   function handlePointerMove(event) {
@@ -1005,6 +753,7 @@ function FeedPage({ feedScene, session, onNavigate }) {
         return;
       }
       const height = getStageHeight();
+      event.currentTarget.setPointerCapture(event.pointerId);
       dragRef.current = {
         ...drag,
         active: true,
@@ -1048,6 +797,9 @@ function FeedPage({ feedScene, session, onNavigate }) {
 
   useEffect(() => {
     const handleKeyDown = (event) => {
+      if (event.key === "Escape") { setCommentsOpen(false); return; }
+      if (isInteractiveTarget(event.target) || gridMode || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (["ArrowDown", "ArrowUp"].includes(event.key)) event.preventDefault();
       if (["ArrowDown", "j", "J"].includes(event.key)) {
         moveTo(Math.min(items.length - 1, index + 1));
       }
@@ -1072,7 +824,7 @@ function FeedPage({ feedScene, session, onNavigate }) {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [index, items.length, setFavorite, setFollow, setLike, swipe]);
+  }, [index, items.length, setFavorite, setFollow, setLike, swipe, gridMode]);
 
   function goNext() {
     moveTo(Math.min(items.length - 1, index + 1));
@@ -1083,6 +835,7 @@ function FeedPage({ feedScene, session, onNavigate }) {
   }
 
   function handleWheel(event) {
+    if (event.target?.closest?.('.dr-player-info')) return;
     if (Math.abs(event.deltaY) < 32 || wheelLocked.current || swipe || items.length < 2) return;
     wheelLocked.current = true;
     if (event.deltaY > 0) {
@@ -1096,7 +849,18 @@ function FeedPage({ feedScene, session, onNavigate }) {
   }
 
   return (
-    <main className="feed-layout">
+    <main className={`stream-page ${gridMode ? "is-searching" : "is-watching"}`} aria-label={currentFeedScene.label}>
+      {feedState === "ready" && feedError && <p className="form-message" role="status">{feedError}</p>}
+      {gridMode ? <section className="browse-section"><p className="browse-summary">在已加载的 {items.length} 部作品中找到 {filterVideos(items, query).length} 部{query && <> · “{query}”</>}<button onClick={() => { onClearSearch(); }}>清除筛选</button></p><div className="browse-grid">{filterVideos(items, query).map(({item, index: itemIndex}) => <button className="browse-card" key={item.entry_id || item.video_id} onClick={() => { setIndex(itemIndex); onClearSearch(); }}><div className="browse-thumb"><img src={item.cover_url || image.stage} alt=""/><span className="browse-play"><Icon name="play_arrow" size={25}/></span><span className="browse-model">{item.model_name || "AIGC"}</span></div><h3>{item.title}</h3><div className="browse-meta"><span>@{item.author}</span><span><Icon name="favorite" size={13}/>{formatMetric(item.like_count)}</span></div></button>)}</div>{feedState === "loading" ? <PageMessage icon="hourglass_top" title="正在加载作品"/> : feedState === "error" ? <PageMessage icon="sync_problem" title={feedError} action="重试" onAction={loadFeed}/> : feedState === "auth" ? <PageMessage icon="lock" title="登录后浏览这个视频流" action="登录" onAction={() => onNavigate("/auth")}/> : filterVideos(items, query).length === 0 && <PageMessage icon="search" title="暂时没有匹配的作品，试试其他关键词"/>}{(hasMore || feedScene === "recommend") && feedState === "ready" && <button className="ghost-button browse-more" disabled={loadingMore} onClick={loadMoreFeed}>{loadingMore ? "正在加载…" : "加载更多作品"}</button>}</section> : <>
+      <div className={`feed-layout ${commentsOpen ? "has-comments" : ""}`}>
+        {feedScene === "hot" && contentSource === "timeline" && feedState === "ready" && items.length > 0 && (
+          <span className="feed-source-label" role="status" title="当前暂无实时热门，按近期作品的互动情况展示精选">近期精选</span>
+        )}
+        <nav className="stream-controls" aria-label="播放列表控制">
+          <button type="button" aria-label="上一部视频" title="上一部视频" disabled={index === 0 || Boolean(swipe)} onClick={goPrev}><Icon name="arrow_upward" size={18}/></button>
+          <button type="button" aria-label="下一部视频" title="下一部视频" disabled={index >= items.length - 1 || Boolean(swipe)} onClick={goNext}><Icon name="arrow_downward" size={18}/></button>
+          <button type="button" aria-label="刷新视频流" title="刷新视频流" disabled={feedState === "loading"} onClick={loadFeed}><Icon name="refresh" size={18}/></button>
+        </nav>
       <section
         className="feed-main"
         ref={feedMainRef}
@@ -1203,6 +967,8 @@ function FeedPage({ feedScene, session, onNavigate }) {
         authenticated={Boolean(session.token && session.user)}
         onOpenUser={(profile) => openPublicProfile(profile, onNavigate)}
       />
+    </div>
+      </>}
     </main>
   );
 }
@@ -1210,172 +976,10 @@ function FeedPage({ feedScene, session, onNavigate }) {
 function FeedMessage({ icon, title, action, onAction }) {
   return (
     <div className="feed-message">
-      <span className="material-symbols-outlined">{icon}</span>
+      <Icon name={icon}/>
       <strong>{title}</strong>
       {action && <button onClick={onAction}>{action}</button>}
     </div>
-  );
-}
-
-function VideoStage({
-  item,
-  active,
-  liked,
-  favorited,
-  following,
-  followBusy,
-  ownVideo,
-  followError,
-  onLike,
-  onComment,
-  onFavorite,
-  onFollow,
-  onPlaybackQoS,
-  onOpenAuthor
-}) {
-  const cover = item.cover_url || image.stage;
-  const media = item.media_url || cover;
-  const showVideo = isVideoSource(media);
-  const [failedMedia, setFailedMedia] = useState("");
-  const videoRef = useRef(null);
-  const itemRef = useRef(item);
-  const qosRef = useRef(createVideoQoSState(item.video_id));
-
-  useEffect(() => {
-    itemRef.current = item;
-  }, [item]);
-
-  const flushQoS = useCallback(() => {
-    const state = qosRef.current;
-    if (!state || !state.playingStartedAt) return;
-    const watchMs = Math.max(0, Math.round(performance.now() - state.playingStartedAt));
-    if (watchMs <= 0 && state.stutterCount <= 0 && state.firstFrameMs === undefined) return;
-    onPlaybackQoS?.(itemRef.current, {
-      firstFrameMs: state.firstFrameMs,
-      stutterCount: state.stutterCount,
-      watchMs,
-      reportID: state.reportID
-    });
-    qosRef.current = {
-      ...createVideoQoSState(itemRef.current.video_id),
-      loadStartedAt: performance.now()
-    };
-  }, [onPlaybackQoS]);
-
-  useEffect(() => {
-    qosRef.current = createVideoQoSState(item.video_id);
-    if (active && showVideo) {
-      qosRef.current.loadStartedAt = performance.now();
-    }
-    return () => {
-      flushQoS();
-    };
-  }, [active, flushQoS, item.video_id, showVideo]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !showVideo) return;
-    if (active) {
-      const playback = video.play();
-      if (playback?.catch) {
-        playback.catch(() => {});
-      }
-      return;
-    }
-    video.pause();
-  }, [active, media, showVideo]);
-
-  function handleLoadedData() {
-    const state = qosRef.current;
-    if (!active || !state || state.firstFrameMs !== undefined) return;
-    const startedAt = state.loadStartedAt || performance.now();
-    state.firstFrameMs = Math.max(0, Math.round(performance.now() - startedAt));
-  }
-
-  function handlePlaying() {
-    const state = qosRef.current;
-    if (!active || !state) return;
-    if (!state.loadStartedAt) {
-      state.loadStartedAt = performance.now();
-    }
-    if (!state.playingStartedAt) {
-      state.playingStartedAt = performance.now();
-    }
-  }
-
-  function handleWaiting() {
-    const state = qosRef.current;
-    if (!active || !state) return;
-    state.stutterCount += 1;
-  }
-
-  return (
-    <article className="video-stage">
-      <img className="stage-backdrop" src={cover} alt="" />
-      <div className="stage-vignette" />
-      {showVideo ? (
-        <video
-          ref={videoRef}
-          className="stage-media"
-          src={media}
-          poster={cover}
-          autoPlay={active}
-          muted
-          loop
-          playsInline
-          preload={active ? "metadata" : "none"}
-          onLoadedData={handleLoadedData}
-          onPlaying={handlePlaying}
-          onWaiting={handleWaiting}
-          onPause={flushQoS}
-          onEnded={flushQoS}
-          onError={() => setFailedMedia(media)}
-        />
-      ) : (
-        <img className="stage-media portrait-media" src={media} alt="" />
-      )}
-      <div className="stage-copy">
-        {failedMedia === media && (
-          <p className="stage-notice" role="status">视频暂时无法播放，请检查视频地址或切换其他作品。</p>
-        )}
-        <div className="creator-row">
-          <button className="creator-profile-button" type="button" onClick={() => onOpenAuthor(profileFromFeedItem(item))}>
-            <img src={item.avatar_url || image.creator} alt="" />
-            <strong>@{item.author}</strong>
-          </button>
-          <button
-            className={`follow-button ${following ? "active" : ""}`}
-            type="button"
-            onClick={onFollow}
-            disabled={followBusy || ownVideo}
-          >
-            {ownVideo ? "本人" : followBusy ? "处理中" : following ? "已关注" : "关注"}
-          </button>
-        </div>
-        {followError && <p className="stage-notice">{followError}</p>}
-        <h1>{item.title}</h1>
-        <p>{item.description}</p>
-        <AIGCMetadata key={item.video_id} video={item} />
-      </div>
-      <div className="action-rail">
-        <ActionButton icon="favorite" label={formatMetric(item.like_count)} active={liked} onClick={onLike} />
-        <ActionButton icon="chat_bubble" label={formatMetric(item.comment_count)} onClick={onComment} />
-        <ActionButton icon="bookmark" label={formatMetric(item.favorite_count)} active={favorited} onClick={onFavorite} />
-        <ActionButton icon="share" label="" compact />
-      </div>
-      <div className="progress-track">
-        <span style={{ width: "34%" }} />
-      </div>
-    </article>
-  );
-}
-
-function ActionButton({ icon, label, active, compact, onClick }) {
-  return (
-    <button className={`rail-button ${active ? "active" : ""} ${compact ? "compact" : ""}`} onClick={onClick}>
-      <span className={`material-symbols-outlined ${active ? "filled" : ""}`}>{icon}</span>
-      {label && <strong>{label}</strong>}
-    </button>
   );
 }
 
@@ -1401,11 +1005,9 @@ function CommentPanel({
           评论 <span>{formatMetric(count)}</span>
         </h2>
         <div>
-          <button className="icon-button small" aria-label="筛选评论">
-            <span className="material-symbols-outlined">tune</span>
-          </button>
+
           <button className="icon-button small" type="button" aria-label="关闭评论" onClick={onClose}>
-            <span className="material-symbols-outlined">close</span>
+            <Icon name="close"/>
           </button>
         </div>
       </header>
@@ -1445,7 +1047,7 @@ function CommentPanel({
           disabled={!authenticated}
         />
         <button aria-label="发送评论" disabled={!authenticated || !value.trim()}>
-          <span className="material-symbols-outlined">send</span>
+          <Icon name="send"/>
         </button>
       </form>
     </aside>
@@ -1455,7 +1057,7 @@ function CommentPanel({
 function CommentMessage({ icon, title, action, onAction }) {
   return (
     <div className="comment-empty">
-      <span className="material-symbols-outlined">{icon}</span>
+      <Icon name={icon}/>
       <strong>{title}</strong>
       {action && <button onClick={onAction}>{action}</button>}
     </div>
@@ -1559,11 +1161,11 @@ function MessagesPage({ session, onNavigate, onUnreadChange }) {
         <div className="messages-actions">
           <span className="messages-count">{unreadCount > 0 ? `${unreadCount} 未读` : "已读完"}</span>
           <button className="ghost-button compact" onClick={() => loadMessages("", false)} disabled={loadingInitial || loadingMore}>
-            <span className="material-symbols-outlined">refresh</span>
+            <Icon name="refresh"/>
             刷新
           </button>
           <button className="primary-button compact" onClick={markAllRead} disabled={markingAll || unreadCount === 0}>
-            <span className="material-symbols-outlined">done_all</span>
+            <Icon name="done_all"/>
             {markingAll ? "处理中" : "全部已读"}
           </button>
         </div>
@@ -1589,7 +1191,7 @@ function MessagesPage({ session, onNavigate, onUnreadChange }) {
                 disabled={busyID === message.id}
               >
                 <span className={`message-icon ${message.is_read ? "" : "active"}`}>
-                  <span className="material-symbols-outlined">{messageIcon(message.type)}</span>
+                  <Icon name={messageIcon(message.type)}/>
                 </span>
                 <span className="message-copy">
                   <span className="message-title-row">
@@ -1611,7 +1213,7 @@ function MessagesPage({ session, onNavigate, onUnreadChange }) {
         </div>
         {hasMore && (
           <button className="ghost-button messages-more" onClick={() => loadMessages(nextCursor, true)} disabled={loadingMore}>
-            <span className="material-symbols-outlined">expand_more</span>
+            <Icon name="expand_more"/>
             {loadingMore ? "加载中" : "加载更多"}
           </button>
         )}
@@ -1623,14 +1225,14 @@ function MessagesPage({ session, onNavigate, onUnreadChange }) {
 function PageMessage({ icon, title, action, onAction }) {
   return (
     <div className="page-message">
-      <span className="material-symbols-outlined">{icon}</span>
+      <Icon name={icon}/>
       <strong>{title}</strong>
       {action && <button onClick={onAction}>{action}</button>}
     </div>
   );
 }
 
-function ProfilePage({ session, onNavigate }) {
+function ProfilePage({ session, onNavigate, editing, setEditing }) {
   const baseUser = session.user || emptyProfile;
   const [form, setForm] = useState({
     nickname: baseUser.nickname || "",
@@ -1639,7 +1241,6 @@ function ProfilePage({ session, onNavigate }) {
   });
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState("");
-  const [editing, setEditing] = useState(false);
   const [selectedWork, setSelectedWork] = useState(null);
   const [status, setStatus] = useState("");
   const [videos, setVideos] = useState([]);
@@ -1874,9 +1475,6 @@ function ProfilePage({ session, onNavigate }) {
               作品
             </button>
           </div>
-          <button className="profile-edit-button" onClick={() => setEditing(true)} aria-label="编辑资料">
-            <span className="material-symbols-outlined">manage_accounts</span>
-          </button>
         </div>
       </section>
 
@@ -1885,7 +1483,7 @@ function ProfilePage({ session, onNavigate }) {
           <header>
             <h2>我的作品</h2>
             <button className="ghost-button compact" onClick={() => onNavigate("/timeline")}>
-              <span className="material-symbols-outlined">home</span>
+              <Icon name="home"/>
               最新视频
             </button>
           </header>
@@ -1912,16 +1510,24 @@ function ProfilePage({ session, onNavigate }) {
       {selectedWork && <WorkViewer video={selectedWork} onClose={() => setSelectedWork(null)} />}
       {editing && (
         <div className="modal-backdrop" role="presentation">
-          <form className="profile-modal profile-form" onSubmit={handleSave}>
+          <form className="profile-modal profile-form" role="dialog" aria-modal="true" aria-labelledby="profile-edit-title" onSubmit={handleSave} onKeyDown={(event) => {
+            if (event.key === "Escape") { event.preventDefault(); setEditing(false); document.getElementById("account-trigger")?.focus(); }
+            if (event.key === "Tab") {
+              const fields = [...event.currentTarget.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea:not(:disabled)')];
+              const first = fields[0], last = fields[fields.length - 1];
+              if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+              else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+            }
+          }}>
             <header>
-              <h2>资料编辑</h2>
+              <h2 id="profile-edit-title">编辑个人资料</h2>
               <button className="icon-button small" type="button" onClick={() => setEditing(false)} aria-label="关闭">
-                <span className="material-symbols-outlined">close</span>
+                <Icon name="close"/>
               </button>
             </header>
             <label>
               <span>昵称</span>
-              <input value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value })} />
+              <input autoFocus value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value })} />
             </label>
             <label>
               <span>头像</span>
@@ -1930,7 +1536,7 @@ function ProfilePage({ session, onNavigate }) {
                   {avatarPreview || form.avatar_url ? (
                     <img src={avatarPreview || form.avatar_url} alt="" />
                   ) : (
-                    <span className="material-symbols-outlined">person</span>
+                    <Icon name="person"/>
                   )}
                 </span>
                 <span className="file-picker-copy">
@@ -1946,7 +1552,7 @@ function ProfilePage({ session, onNavigate }) {
             </label>
             {status && <p className={`form-message ${status === "已保存" ? "success" : ""}`}>{status}</p>}
             <button className="primary-button">
-              <span className="material-symbols-outlined">save</span>
+              <Icon name="save"/>
               保存
             </button>
           </form>
@@ -2043,7 +1649,7 @@ function PublicProfilePage({ userID, onNavigate }) {
             </button>
           </div>
           <button className="ghost-button compact public-back-button" type="button" onClick={() => onNavigate("/timeline")}>
-            <span className="material-symbols-outlined">home</span>
+            <Icon name="home"/>
             最新视频
           </button>
         </div>
@@ -2072,7 +1678,7 @@ function VideoGrid({ videos, state, onSelect }) {
         <button className="work-item" key={video.id || video.video_id} onClick={() => onSelect(video)}>
           <div className="work-thumb">
             <img src={video.cover_url || image.stage} alt="" />
-            <span className="material-symbols-outlined">play_arrow</span>
+            <Icon name="play_arrow"/>
           </div>
           <div className="work-meta">
             <h3>{video.title}</h3>
@@ -2186,7 +1792,7 @@ function RelationModal({
               </button>
             </div>
             <button className="icon-button small" type="button" onClick={onClose} aria-label="关闭关系弹窗">
-              <span className="material-symbols-outlined">close</span>
+              <Icon name="close"/>
             </button>
           </div>
         </header>
@@ -2221,7 +1827,7 @@ function WorkViewer({ video, onClose }) {
             <p>{formatMetric(video.like_count || 0)} 点赞 · {formatMetric(video.comment_count || 0)} 评论</p>
           </div>
           <button className="icon-button small" type="button" onClick={onClose} aria-label="关闭">
-            <span className="material-symbols-outlined">close</span>
+            <Icon name="close"/>
           </button>
         </header>
         <div className="work-viewer-stage">
@@ -2237,264 +1843,12 @@ function WorkViewer({ video, onClose }) {
   );
 }
 
-function UploadProgress({ label, upload, disabled, onRetry }) {
-  if (!upload) return null;
-  const { phase, percent, error } = upload;
-  const message = phase === "ready" ? "已就绪"
-    : phase === "processing" ? "传输完成，正在等待服务器处理…"
-    : phase === "error" ? error : `上传中 ${percent}%`;
-  return (
-    <div className={`upload-progress ${phase}`}>
-      <div className="upload-progress-copy">
-        <span role="status">{label}：{message}</span>
-        {phase === "error" && <button className="ghost-button compact" type="button" disabled={disabled} onClick={onRetry}>重试{label}上传</button>}
-      </div>
-      <progress aria-label={`${label}上传进度`} value={percent} max="100" />
-    </div>
-  );
-}
-
-function UploadPage({ session, onNavigate }) {
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    model_name: "",
-    model_params: "",
-    ai_style_tag: "",
-    origin_video_id: ""
-  });
-  const [uploads, setUploads] = useState({ video: null, cover: null });
-  const videoFile = uploads.video?.file || null;
-  const coverFile = uploads.cover?.file || null;
-  const [coverPreview, setCoverPreview] = useState("");
-  const [status, setStatus] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [publishing, setPublishing] = useState(false);
-  const submittingRef = useRef(false);
-  const publishAbortRef = useRef(null);
-  const publishAttemptRef = useRef(null);
-  const uploadManager = useMemo(() => createUploadManager({
-    upload: (file, kind, options) => uploadWithProgress(file, kind, session.token, options),
-    onChange: (kind, state) => setUploads((previous) => ({ ...previous, [kind]: state }))
-  }), [session.token]);
-
-  useEffect(() => {
-    setUploads({ video: null, cover: null });
-    return () => {
-      uploadManager.cancelAll();
-      publishAbortRef.current?.abort();
-      publishAbortRef.current = null;
-      submittingRef.current = false;
-    };
-  }, [uploadManager]);
-
-  useEffect(() => {
-    if (!coverFile) {
-      setCoverPreview("");
-      return;
-    }
-    const objectURL = URL.createObjectURL(coverFile);
-    setCoverPreview(objectURL);
-    return () => URL.revokeObjectURL(objectURL);
-  }, [coverFile]);
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    if (submittingRef.current) return;
-    submittingRef.current = true;
-    const controller = new AbortController();
-    publishAbortRef.current = controller;
-    setStatus("");
-    try {
-      if (!form.title.trim()) throw new Error("请输入视频标题");
-      if (new TextEncoder().encode(form.title.trim()).length > 128) throw new Error("标题不能超过 128 字节");
-      if (new TextEncoder().encode(form.description.trim()).length > 512) throw new Error("简介不能超过 512 字节");
-      if (!videoFile) throw new Error("请选择视频文件");
-      if (!coverFile) throw new Error("请选择封面文件");
-      const aigc = buildAIGCPayload(form);
-      setSubmitting(true);
-      setStatus("正在等待文件上传和处理完成…");
-      const [videoUpload, coverUpload] = await Promise.all([
-        uploadManager.ensure("video"),
-        uploadManager.ensure("cover")
-      ]);
-      if (controller.signal.aborted) return;
-      const payload = {
-        title: form.title.trim(),
-        description: form.description.trim(),
-        media_url: videoUpload.url,
-        cover_url: coverUpload.url,
-        ...aigc
-      };
-      // 同一内容的发布重试沿用幂等键，避免响应丢失后重复创建作品。
-      const signature = JSON.stringify(payload);
-      if (publishAttemptRef.current?.signature !== signature) {
-        publishAttemptRef.current = { signature, key: createFeedRequestID("upload") };
-      }
-      setPublishing(true);
-      setStatus("文件已就绪，正在发布视频…");
-      await apiRequest("/api/videos", {
-        method: "POST",
-        token: session.token,
-        signal: controller.signal,
-        headers: { "Idempotency-Key": publishAttemptRef.current.key },
-        body: payload
-      });
-      if (controller.signal.aborted) return;
-      setStatus("发布成功");
-      onNavigate("/profile");
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      if (error.status === 401) {
-        session.clearAuth();
-        onNavigate("/auth");
-        return;
-      }
-      setStatus(error.message || "发布失败");
-    } finally {
-      if (publishAbortRef.current === controller) {
-        publishAbortRef.current = null;
-        submittingRef.current = false;
-        setSubmitting(false);
-        setPublishing(false);
-      }
-    }
-  }
-
-  if (!session.token) {
-    return (
-      <main className="upload-page">
-        <section className="upload-card">
-          <div className="upload-empty">
-            <span className="material-symbols-outlined">lock</span>
-            <h1>登录后发布视频</h1>
-            <button className="primary-button" onClick={() => onNavigate("/auth")}>
-              <span className="material-symbols-outlined">login</span>
-              登录
-            </button>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  return (
-    <main className="upload-page">
-      <section className="upload-card">
-        <header>
-          <div>
-            <p className="eyebrow">发布</p>
-            <h1>发布视频</h1>
-          </div>
-          <button className="ghost-button compact" onClick={() => onNavigate("/timeline")}>
-            <span className="material-symbols-outlined">home</span>
-            最新视频
-          </button>
-        </header>
-
-        <p className="upload-hint">选择文件后自动上传，可同时填写作品信息；点击“发布”后才会公开。</p>
-        <div className="upload-grid">
-          <form className="upload-form" onSubmit={handleSubmit} aria-busy={submitting}>
-            <label>
-              <span>标题</span>
-              <input
-                value={form.title}
-                disabled={submitting}
-                required
-                onChange={(event) => setForm({ ...form, title: event.target.value })}
-                placeholder="输入视频标题"
-              />
-            </label>
-            <label>
-              <span>简介</span>
-              <textarea
-                value={form.description}
-                disabled={submitting}
-                onChange={(event) => setForm({ ...form, description: event.target.value })}
-                placeholder="输入视频简介"
-                rows={4}
-              />
-            </label>
-            <div className="upload-file-field">
-              <label>
-                <span>视频</span>
-                <span className="file-picker">
-                  <span className="material-symbols-outlined">movie</span>
-                  <span className="file-picker-copy">
-                    <strong>{videoFile ? videoFile.name : "选择视频文件"}</strong>
-                    <small>MP4 / MOV / WebM，最大 512 MB</small>
-                  </span>
-                  <input type="file" aria-label="选择视频文件" accept=".mp4,.mov,.webm" disabled={submitting} onChange={(event) => uploadManager.select("video", event.target.files?.[0] || null)} />
-                </span>
-              </label>
-              <UploadProgress label="视频" upload={uploads.video} disabled={submitting} onRetry={() => uploadManager.ensure("video").catch(() => {})} />
-            </div>
-            <div className="upload-file-field">
-              <label>
-                <span>封面</span>
-                <span className="file-picker">
-                  <span className="material-symbols-outlined">image</span>
-                  <span className="file-picker-copy">
-                    <strong>{coverFile ? coverFile.name : "选择封面文件"}</strong>
-                    <small>JPG / PNG / WebP，最大 20 MB</small>
-                  </span>
-                  <input type="file" aria-label="选择封面文件" accept=".jpg,.jpeg,.png,.webp" disabled={submitting} onChange={(event) => uploadManager.select("cover", event.target.files?.[0] || null)} />
-                </span>
-              </label>
-              <UploadProgress label="封面" upload={uploads.cover} disabled={submitting} onRetry={() => uploadManager.ensure("cover").catch(() => {})} />
-            </div>
-            <fieldset className="aigc-fields" disabled={submitting}>
-              <legend>AIGC 创作信息 <small>选填</small></legend>
-              <p>使用 AI 创作的视频可填写以下信息，发布后公开展示；填写模型名称后计入模型榜单。</p>
-              <label>
-                <span>模型名称</span>
-                <input value={form.model_name} onChange={(event) => setForm({ ...form, model_name: event.target.value })} maxLength={64} placeholder="例如：模型名称及版本" />
-                <small>最多 64 字节，建议包含版本号</small>
-              </label>
-              <label>
-                <span>风格标签</span>
-                <input value={form.ai_style_tag} onChange={(event) => setForm({ ...form, ai_style_tag: event.target.value })} maxLength={32} placeholder="例如：写实、动画、水墨" />
-                <small>最多 32 字节</small>
-              </label>
-              <label>
-                <span>生成参数 / 提示词</span>
-                <textarea value={form.model_params} onChange={(event) => setForm({ ...form, model_params: event.target.value })} maxLength={1024} rows={3} placeholder="记录提示词、分辨率、种子等创作参数" />
-                <small>最多 1024 字节，中文通常占 3 字节</small>
-              </label>
-              <label>
-                <span>原视频 ID</span>
-                <input value={form.origin_video_id} onChange={(event) => setForm({ ...form, origin_video_id: event.target.value })} inputMode="numeric" pattern="[0-9]+" placeholder="基于已有作品创作时填写" />
-              </label>
-            </fieldset>
-            {status && <p className={`form-message ${status === "发布成功" || submitting ? "success" : ""}`} role="status">{status}</p>}
-            <button className="primary-button" disabled={submitting}>
-              <span className="material-symbols-outlined">publish</span>
-              {submitting ? publishing ? "发布中" : "等待文件就绪" : "发布"}
-            </button>
-          </form>
-
-          <aside className="upload-preview">
-            <div className="preview-frame">
-              {coverPreview ? <img src={coverPreview} alt="" /> : <span className="material-symbols-outlined">movie</span>}
-            </div>
-            <div>
-              <h2>{form.title || "视频预览"}</h2>
-              <p>{form.description || (videoFile ? videoFile.name : "选择本地视频和封面后会提交到后端视频接口。")}</p>
-              <AIGCMetadata video={form} />
-            </div>
-          </aside>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-
 function normalizeRoute(pathname) {
   if (pathname === "/login") return "/auth";
   if (pathname === "/me") return "/profile";
+  if (pathname === "/upload") return "/create";
   if (/^\/users\/\d+$/.test(pathname)) return pathname;
-  if (["/", "/auth", "/recommend", "/timeline", "/following", "/hotfeed", "/models", "/profile", "/upload", "/messages"].includes(pathname)) {
+  if (["/", "/auth", "/recommend", "/timeline", "/following", "/hotfeed", "/models", "/profile", "/create", "/upload", "/messages"].includes(pathname)) {
     return pathname;
   }
   return "/timeline";
@@ -2588,18 +1942,6 @@ async function markMessagesRead(token, messageIDs = []) {
       message_ids: messageIDs
     }
   });
-}
-
-function appendFeedItems(currentItems, nextItems) {
-  if (!nextItems.length) return currentItems;
-  const seen = new Set(currentItems.map((item) => item.video_id));
-  const merged = [...currentItems];
-  for (const item of nextItems) {
-    if (seen.has(item.video_id)) continue;
-    seen.add(item.video_id);
-    merged.push(item);
-  }
-  return merged;
 }
 
 function appendMessages(currentItems, nextItems) {
@@ -2711,17 +2053,6 @@ function prewarmVideoMetadata(url, loadedSet) {
   probe.load();
 }
 
-function createVideoQoSState(videoID) {
-  return {
-    videoID,
-    reportID: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    loadStartedAt: 0,
-    playingStartedAt: 0,
-    firstFrameMs: undefined,
-    stutterCount: 0
-  };
-}
-
 function buildPlaybackQoSPayload(metrics) {
   const watchMs = Math.max(0, Math.round(Number(metrics?.watchMs || 0)));
   const stutterCount = Math.max(0, Math.round(Number(metrics?.stutterCount || 0)));
@@ -2782,15 +2113,6 @@ function valueOrUndefined(value) {
   if (value === undefined || value === null || value === "") return undefined;
   const number = Number(value);
   return Number.isFinite(number) ? number : undefined;
-}
-
-function profileFromFeedItem(item) {
-  return {
-    id: item.author_id,
-    nickname: item.author,
-    avatar_url: item.avatar_url,
-    bio: item.author_bio || ""
-  };
 }
 
 function profileFromComment(comment) {
@@ -3026,7 +2348,7 @@ function clampSwipeOffset(direction, delta, height) {
 }
 
 function isInteractiveTarget(target) {
-  return Boolean(target?.closest?.("button, a, input, textarea, select, details, .comment-panel"));
+  return Boolean(target?.closest?.("button, a, input, textarea, select, details, .comment-panel, [contenteditable='true'], .modal-backdrop"));
 }
 
 function formatRelativeTime(value) {

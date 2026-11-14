@@ -21,10 +21,10 @@ type videoWithStatModel struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	// AIGC 元数据
-	ModelName     *string
-	ModelParams   *string
-	AIStyleTag    *string
-	OriginVideoID *int64
+	ModelName     *string // 使用的模型名称
+	ModelParams   *string // 模型参数
+	AIStyleTag    *string // AI风格标签
+	OriginVideoID *int64  // 若存在，则表示该视频是原始视频的衍生视频，用于视频的溯源
 }
 
 func restorevideo(model videoWithStatModel) *domainvideo.Video {

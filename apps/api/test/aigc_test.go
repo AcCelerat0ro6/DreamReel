@@ -75,7 +75,7 @@ func TestAIGCPublishAndFeed(t *testing.T) {
 			}
 		}
 	}
-	for _, fields := range []map[string]any{{"origin_video_id": 0}, {"origin_video_id": -1}, {"model_name": strings.Repeat("中", 22)}, {"model_params": strings.Repeat("x", 1025)}, {"ai_style_tag": strings.Repeat("x", 33)}} {
+	for _, fields := range []map[string]any{{"origin_video_id": 0}, {"origin_video_id": -1}, {"model_name": strings.Repeat("中", 65)}, {"model_params": strings.Repeat("x", 1025)}, {"ai_style_tag": strings.Repeat("x", 33)}} {
 		payload = base()
 		for k, v := range fields {
 			payload[k] = v
