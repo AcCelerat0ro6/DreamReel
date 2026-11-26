@@ -6,3 +6,5 @@ apps/web/.env.*.local
 .local/
 .runtime/
 apps/api/uploads/
+apps/api/logfile/
+/docs/recommendation_k6_benchmark_2026-11-06.md

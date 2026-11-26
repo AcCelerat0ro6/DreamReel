@@ -1,26 +1,26 @@
 # 推荐会话队列 k6 A/B 压测
 
-比较 GCFeed 原实现和 DreamReel 工作区实现，通过两个版本各自的生产路由请求 `POST /api/feed-queries`。服务使用真实 MySQL 和 Redis，测试 API 仅监听本机回环地址。RabbitMQ 关闭。
+对比两个 DreamReel 版本的推荐分页性能。k6 通过两个版本各自的生产路由请求 `POST /api/feed-queries`。测试使用 MySQL 和 Redis，API 仅监听本机回环地址，RabbitMQ 关闭。
 
 ## 执行
 
 需要 Windows PowerShell 5.1 或 PowerShell 7、Python、Go 和 k6，本机配置指向可访问的 MySQL、Redis。运行脚本需要访问本机端口、启动后台子进程，以及创建和清理独立测试库的权限。
 
+从 DreamReel 仓库根目录执行。将 `$baselineApi` 指向基线检出的 `apps/api` 目录。两个版本都需要提供 `router.Register(g, cfg, db, rdb, rabbitMQ)` 和推荐查询路由。
+
 ```powershell
-cd G:/GoCode/DreamReel/benchmarks/recommendation
-./run.ps1 -BaselineRoot G:/GoCode/GCFeed/apps/api `
-  -Config G:/GoCode/DreamReel/apps/api/configs/config.yaml `
-  -Videos 10000 -Rounds 3 -Duration 20s
+$baselineApi = '../DreamReel-baseline/apps/api'
+./benchmarks/recommendation/run.ps1 -BaselineRoot $baselineApi -Videos 10000 -Rounds 3 -Duration 20s
 ```
 
 `run.ps1` 使用 UTF-8 BOM 编码，以兼容 Windows PowerShell 5.1。编辑后请保留 BOM，目录中的 `.editorconfig` 已声明该约定。
 
-脚本会在 `.work` 复制两个版本的 Go 源码并构建，仅从旧项目读取文件。测试连接参数从应用配置加载，报告不保存真实连接密码和 JWT 密钥。测试使用新建的数据库和两个原先为空的 Redis DB，通过资源清单回收。`finally` 负责停止本次创建的两个测试进程并清理数据。如果被强制结束且没有执行清理，可使用同一配置和结果目录中的清单执行以下命令。
+脚本在 `.work` 内独立构建基线和当前版本。连接配置默认使用当前版本的 `apps/api/configs/config.yaml`，也可传入 `-Config`。测试使用新建的数据库和两个原先为空的 Redis 逻辑库。脚本退出时停止测试进程并按资源清单清理。如果进程被强制结束，可从仓库根目录使用同一配置和对应的 `fixture.json` 清理。
 
 ```powershell
-./.work/current.exe -action cleanup `
-  -config G:/GoCode/DreamReel/apps/api/configs/config.yaml `
-  -fixture ./results/<run>/fixture.json
+./benchmarks/recommendation/.work/current.exe -action cleanup `
+  -config ./apps/api/configs/config.yaml `
+  -fixture './benchmarks/recommendation/results/<run>/fixture.json'
 ```
 
 ## 场景
@@ -52,9 +52,8 @@ cd G:/GoCode/DreamReel/benchmarks/recommendation
 
 - `recommendation.js` 为 k6 负载脚本。
 - `harness.go.tmpl` 为共用启动与计数代码模板，两个版本使用相同计数方式。
-- `prepare.py` 为源码复制和构建脚本，`source-manifest.json` 保存原始源文件 SHA-256。
+- `prepare.py` 为源码复制和构建脚本。每次运行的 `source-manifest.json` 保存两份源码的 SHA-256。
 - `run.ps1` 为执行与清理入口。
 - `analyze.py <results-directory>` 重新生成 `analysis.json` 与 `rounds.csv`。
-- `results/20261106-ab` 为修正游标传递后的正式结果。`pilot-20261106` 和 `20261106-main` 是发现游标传递问题前的预检/中止数据，不能用于翻页性能结论。
 
 k6 指标和调度模型的官方说明可参阅 [内置指标](https://grafana.com/docs/k6/latest/using-k6/metrics/reference/) 与 [开放和闭环负载模型](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/open-vs-closed/)。

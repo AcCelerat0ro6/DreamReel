@@ -16,15 +16,15 @@ import (
 )
 
 const (
-	defaultInteractionExchange      = "gcfeed.interaction"
-	defaultActionChangedQueue       = "gcfeed.interaction.action_changed"
+	defaultInteractionExchange      = "dreamreel.interaction"
+	defaultActionChangedQueue       = "dreamreel.interaction.action_changed"
 	defaultActionChangedRouting     = "interaction.action_changed"
-	defaultVideoExchange            = "gcfeed.video"
-	defaultVideoPublishedQueue      = "gcfeed.video.published"
-	defaultVideoEmbeddingQueue      = "gcfeed.video.embedding"
+	defaultVideoExchange            = "dreamreel.video"
+	defaultVideoPublishedQueue      = "dreamreel.video.published"
+	defaultVideoEmbeddingQueue      = "dreamreel.video.embedding"
 	defaultVideoPublishedRouting    = "video.published"
-	defaultExposureExchange         = "gcfeed.exposure"
-	defaultViewEventRecordedQueue   = "gcfeed.exposure.view_event_recorded"
+	defaultExposureExchange         = "dreamreel.exposure"
+	defaultViewEventRecordedQueue   = "dreamreel.exposure.view_event_recorded"
 	defaultViewEventRecordedRouting = "exposure.view_event_recorded"
 )
 

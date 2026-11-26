@@ -37,7 +37,7 @@ const defaultConfigPath = "G:\\GoCode\\DreamReel\\apps\\api\\configs\\config.yam
 
 func main() {
 	if err := run(); err != nil {
-		zap.L().Error("gcfeed worker 启动失败", zap.Error(err))
+		zap.L().Error("dreamreel worker 启动失败", zap.Error(err))
 		_ = zap.L().Sync()
 		os.Exit(1)
 	}
@@ -93,9 +93,9 @@ func run() error {
 	if err := startWorkers(ctx, cfg, gormDB, rabbitMQ); err != nil {
 		return fmt.Errorf("启动 worker 失败: %w", err)
 	}
-	zap.L().Info("gcfeed worker is running")
+	zap.L().Info("dreamreel worker is running")
 	<-ctx.Done()
-	zap.L().Info("gcfeed worker stopped")
+	zap.L().Info("dreamreel worker stopped")
 	return nil
 }
 

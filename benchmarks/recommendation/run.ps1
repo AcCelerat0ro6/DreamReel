@@ -1,13 +1,16 @@
 ﻿#Requires -Version 5.1
 param(
-    [string]$BaselineRoot = 'G:/GoCode/GCFeed/apps/api',
-    [string]$Config = 'G:/GoCode/DreamReel/apps/api/configs/config.yaml',
+    [Parameter(Mandatory=$true)]
+    [string]$BaselineRoot,
+    [string]$Config = "$PSScriptRoot/../../apps/api/configs/config.yaml",
     [int]$Videos = 10000,
     [int]$Rounds = 3,
     [string]$Duration = '20s',
     [string]$RunName = (Get-Date -Format 'yyyyMMdd-HHmmss')
 )
 $ErrorActionPreference = 'Stop'
+$BaselineRoot = (Resolve-Path -LiteralPath $BaselineRoot).Path
+$Config = (Resolve-Path -LiteralPath $Config).Path
 Set-Location $PSScriptRoot
 $work = Join-Path $PSScriptRoot '.work'
 $result = Join-Path $PSScriptRoot ('results/' + $RunName)
@@ -38,6 +41,7 @@ function Invoke-K6 {
 try {
     & python -X utf8 prepare.py --baseline $BaselineRoot
     if ($LASTEXITCODE -ne 0) { throw '构建失败' }
+    Copy-Item -LiteralPath "$work/source-manifest.json" -Destination $result
     & "$work/current.exe" -action prepare -config $Config -fixture $fixture -videos $Videos
     if ($LASTEXITCODE -ne 0) { throw '测试数据准备失败' }
     $resource = Get-Content -LiteralPath $fixture -Raw | ConvertFrom-Json
@@ -59,8 +63,8 @@ try {
         go = (& go version | Out-String).Trim()
         processor = @(Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors)
         memory = @(Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize)
-        baselineHead = (& git -C (Split-Path (Split-Path $BaselineRoot)) rev-parse HEAD | Out-String).Trim()
-        currentHead = (& git -C (Split-Path (Split-Path $Config)) rev-parse HEAD | Out-String).Trim()
+        baselineHead = (& git -C $BaselineRoot rev-parse HEAD | Out-String).Trim()
+        currentHead = (& git -C $PSScriptRoot rev-parse HEAD | Out-String).Trim()
         gomaxprocs = 4
         databasePool = @{maxOpen=50;maxIdle=10}
         videos = $Videos

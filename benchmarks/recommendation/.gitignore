@@ -1,4 +1,7 @@
 .work/
+source-manifest.json
+results/20261106-180441/
+results/20261106-ab/
 results/pilot-*/
 results/20261106-main/
 results/compat-*/
